@@ -208,7 +208,7 @@ We welcome contributions of all kinds! Whether you are fixing a bug, adding a fe
 
 - **Found a bug?** Report it on our **[GitHub Issues](https://github.com/akashdh11/skystream/issues)** page.
 - **Want to translate?** See our **[Translation Guide](docs/CONTRIBUTING_TRANSLATIONS.md)**.
-- **Want to build a plugin?** Check the **[Extension Guide](docs/PLUGIN_DEVELOPMENT_GUIDE.md)**.
+- **Want to build a plugin?** Check the **[Extension Guide](https://github.com/akashdh11/skystream-tools/blob/main/DEVELOPER.md)**.
 - **Need help?** Join the community on **[Discord](https://discord.gg/73XGA8Mxn9)** or **[Telegram](https://t.me/+Ez5Vsv2pUUFjZmNl)**.
 
 ---
