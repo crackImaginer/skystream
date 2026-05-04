@@ -421,6 +421,7 @@ class PlayerController extends Notifier<PlayerState> {
   StreamSubscription<dynamic>? _completedSub;
   StreamSubscription<dynamic>? _rateSub;
   StreamSubscription<dynamic>? _logSub;
+  StreamSubscription<dynamic>? _trackSub;
 
   // Stall Watchdog state
   Duration? _lastPosition;
@@ -441,6 +442,10 @@ class PlayerController extends Notifier<PlayerState> {
   // Audio tracks that have already failed with decode errors for the current
   // stream. When one track fails, we try the next one before source-switching.
   final Set<String> _failedAudioTrackIds = {};
+  // Last real audio track that was actively playing (mpv resets state.track.audio
+  // to "no" before the error event fires, so we track it here via stream.track).
+  String? _lastKnownAudioTrackId;
+  DateTime? _audioFailoverLastTime;
 
   String _phaseTitle([String? fallback]) {
     if (state.playerTitle.isNotEmpty) return state.playerTitle;
@@ -653,6 +658,7 @@ class PlayerController extends Notifier<PlayerState> {
       _completedSub?.cancel();
       _rateSub?.cancel();
       _logSub?.cancel();
+      _trackSub?.cancel();
     });
     return const PlayerState();
   }
@@ -1096,6 +1102,17 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   void _setupErrorListener() {
+    // Record the last real audio track so we know which one failed when the
+    // error fires (mpv resets state.track.audio to "no" before the error
+    // event propagates, making state.track.audio unreliable at error time).
+    _trackSub?.cancel();
+    _trackSub = _player.stream.track.listen((track) {
+      final id = track.audio.id.toString();
+      if (id != 'no' && id != 'auto') {
+        _lastKnownAudioTrackId = id;
+      }
+    });
+
     _errorSub = _player.stream.error.listen((error) {
       if (kDebugMode) debugPrint("Player Error: $error");
       if (error.toString().toLowerCase().contains("abort")) return;
@@ -1104,30 +1121,90 @@ class PlayerController extends Notifier<PlayerState> {
         'decoding audio',
       );
 
+      // Video decode errors (h264 hardware-accelerator failures, PPS/SPS state
+      // loss after an audio track switch) are transient during active playback:
+      // the decoder self-heals on the next keyframe. Restarting the entire
+      // source would be far worse than letting the stall watchdog handle a
+      // truly broken stream (position stuck for 5 s → watchdog calls play()).
+      final isVideoDecodeError = error.toString().toLowerCase().contains(
+        'decoding video',
+      );
+      if (isVideoDecodeError &&
+          !state.isLive &&
+          _hasConfirmedPlaybackFrame &&
+          _player.state.position > Duration.zero) {
+        if (kDebugMode) {
+          debugPrint(
+            '[Player] Ignoring transient video decode error during confirmed playback.',
+          );
+        }
+        return;
+      }
+
       // HE-AAC (AAC+SBR) streams trigger "Error decoding audio" because
       // FFmpeg initializes the codec in AAC-LC mode and then encounters SBR
       // extension data. Rather than switching the whole source, try each
       // audio rendition in turn — the next track is typically stereo AAC-LC
       // and decodes correctly (matches what the user gets by manually
       // switching the audio track in the UI).
+      //
+      // mpv resets state.track.audio to the "no" sentinel before the error
+      // event fires, so we use _lastKnownAudioTrackId (recorded via
+      // stream.track above) to identify which track actually failed.
       if (isAudioDecodeError && !state.isLive) {
-        _failedAudioTrackIds.add(_player.state.track.audio.id.toString());
+        // Debounce: ignore duplicate errors within 500 ms.
+        final now = DateTime.now();
+        if (_audioFailoverLastTime != null &&
+            now.difference(_audioFailoverLastTime!) <
+                const Duration(milliseconds: 500)) {
+          return;
+        }
+        _audioFailoverLastTime = now;
+
+        if (_lastKnownAudioTrackId != null) {
+          _failedAudioTrackIds.add(_lastKnownAudioTrackId!);
+        } else {
+          // stream.track hasn't fired yet (error came in before the first
+          // track-change event). Mark the first real track as failed so we
+          // don't loop back to it.
+          final firstReal = _player.state.tracks.audio.firstWhereOrNull(
+            (t) => t.id != 'no' && t.id != 'auto',
+          );
+          if (firstReal != null) {
+            _failedAudioTrackIds.add(firstReal.id.toString());
+          }
+        }
         final nextTrack = _player.state.tracks.audio.firstWhereOrNull(
-          (t) => !_failedAudioTrackIds.contains(t.id.toString()),
+          (t) =>
+              t.id != 'no' &&
+              t.id != 'auto' &&
+              !_failedAudioTrackIds.contains(t.id.toString()),
         );
         if (nextTrack != null) {
           if (kDebugMode) {
             debugPrint(
-              '[Player] Audio decode error — trying next audio track: ${nextTrack.id} (${nextTrack.language})',
+              '[Player] Audio decode error on track $_lastKnownAudioTrackId'
+              ' — trying next: ${nextTrack.id} (${nextTrack.language})',
             );
           }
+          _lastKnownAudioTrackId = nextTrack.id.toString();
           _player.setAudioTrack(nextTrack).catchError((_) {});
           return;
         }
-        // All available tracks exhausted — fall through to source switch.
+        // All audio tracks exhausted. Disable audio rather than restarting
+        // the entire source — video was playing correctly and a restart would
+        // lose the playback position and show a spinner for no benefit.
         if (kDebugMode) {
-          debugPrint('[Player] All audio tracks failed, switching source.');
+          debugPrint(
+            '[Player] All audio tracks failed — disabling audio to preserve video playback.',
+          );
         }
+        final noTrack = _player.state.tracks.audio
+            .firstWhereOrNull((t) => t.id == 'no');
+        if (noTrack != null) {
+          _player.setAudioTrack(noTrack).catchError((_) {});
+        }
+        return;
       }
 
       if (!_hasConfirmedPlaybackFrame ||
@@ -1708,6 +1785,8 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     _failedAudioTrackIds.clear();
+    _lastKnownAudioTrackId = null;
+    _audioFailoverLastTime = null;
 
     // FFmpeg's HLS demuxer opens audio rendition playlists as separate
     // AVFormatContext instances that do NOT inherit parent HTTP headers on any
@@ -3065,6 +3144,12 @@ class PlayerController extends Notifier<PlayerState> {
         await native.setProperty('demuxer-readahead-secs', '$readahead');
         await native.setProperty('cache-secs', '$readahead');
         await native.setProperty('cache', 'yes');
+
+        // Allow backward seeks even when mpv's stream layer reports the source
+        // as non-seekable (e.g. HTTP streams missing Content-Length). mpv will
+        // use its demuxer cache for backwards seeks within the cached window and
+        // fall back to a forward re-read if the target is outside the cache.
+        await native.setProperty('force-seekable', 'yes');
 
         // Force mpv to select the highest-bandwidth HLS variant so it never
         // picks an audio-only rendition when the master playlist lists one first.

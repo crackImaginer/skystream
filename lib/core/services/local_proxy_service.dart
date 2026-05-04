@@ -302,23 +302,34 @@ class LocalProxyService {
           ? 200
           : response.statusCode;
 
-      // Copy response headers.
-      // - content-length: always stripped. autoUncompress=true decompresses gzip
-      //   but leaves Content-Length at the compressed size; writing larger bytes
-      //   causes ContentSizeException. Dart falls back to chunked transfer.
-      // - content-encoding: always stripped. autoUncompress=true decompresses the
-      //   body but does NOT remove this header from response.headers. Forwarding
-      //   "Content-Encoding: gzip" with already-decompressed bytes causes mpv/FFmpeg
-      //   to attempt a second decompression and corrupt audio/video data. Audio
-      //   segments (.js) are text/javascript so CDNs gzip them; video segments
-      //   (.jpg) are image/jpeg so CDNs don't — this is why video played but audio
-      //   didn't before this fix.
+      // Dart's autoUncompress=true decompresses gzip bodies but does NOT update
+      // Content-Length (still shows compressed size) or remove Content-Encoding.
+      // We must strip both for gzip responses so mpv doesn't double-decompress
+      // and gets accurate size hints.
+      //
+      // For M3U8 responses the body is rewritten (URLs expanded), so
+      // content-length is always wrong regardless of encoding.
+      //
+      // For plain binary responses (MKV, MP4, JPEG video segments, etc.) we
+      // must forward content-length as-is: mpv relies on it to build the
+      // byte-offset table for seeking. Stripping it makes mpv treat the stream
+      // as "linear" and refuse backward seeks.
+      final wasGzip = response.headers
+              .value('content-encoding')
+              ?.toLowerCase()
+              .contains('gzip') ==
+          true;
       response.headers.forEach((name, values) {
         final lowerName = name.toLowerCase();
-        if (lowerName == 'content-length') return;
-        if (lowerName == 'content-encoding') return;
-        if (lowerName == 'transfer-encoding') return;
         if (lowerName == 'access-control-allow-origin') return;
+        if (lowerName == 'transfer-encoding') return;
+        // Strip content-length when gzip (size changed after decompress) or M3U8
+        // (body will be rewritten). Keep it for binary content so mpv can seek.
+        if (lowerName == 'content-length' && (wasGzip || isResponseM3u8)) return;
+        // Strip content-encoding only when we actually decompressed gzip.
+        // Forwarding "Content-Encoding: gzip" with a plain body causes mpv to
+        // attempt decompression and corrupt the data.
+        if (lowerName == 'content-encoding' && wasGzip) return;
         for (final value in values) {
           request.response.headers.add(name, value);
         }
