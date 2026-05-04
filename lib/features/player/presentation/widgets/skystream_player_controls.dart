@@ -951,16 +951,19 @@ class SkyStreamPlayerControlsState
   }
 
   Widget _buildLockedUI() {
-    return AnimatedOpacity(
-      opacity: _isVisible ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 300),
-      child: Center(
-        child: _buildActionButton(
-          icon: Icons.lock,
-          label: AppLocalizations.of(context)!.unlock,
-          onTap: _toggleLock,
-          rotate: false,
-          highlight: false,
+    return IgnorePointer(
+      ignoring: !_isVisible,
+      child: AnimatedOpacity(
+        opacity: _isVisible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 300),
+        child: Center(
+          child: _buildActionButton(
+            icon: Icons.lock,
+            label: AppLocalizations.of(context)!.unlock,
+            onTap: _toggleLock,
+            rotate: false,
+            highlight: false,
+          ),
         ),
       ),
     );
