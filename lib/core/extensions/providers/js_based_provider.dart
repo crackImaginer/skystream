@@ -8,6 +8,7 @@ import '../../domain/entity/multimedia_item.dart';
 import '../base_provider.dart';
 import '../engine/js_engine.dart';
 import '../engine/js_bytecode_compiler.dart';
+import '../models/extension_plugin.dart';
 import '../../services/local_proxy_service.dart';
 import '../../logger/app_logger.dart';
 
@@ -18,7 +19,7 @@ Map<String, List<MultimediaItem>> _parseHomeResults(dynamic result) {
     result.forEach((key, value) {
       if (value is List) {
         map[key.toString()] = value
-            .map((e) => MultimediaItem.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) => MultimediaItem.fromJson(Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
             .toList();
       }
     });
@@ -30,7 +31,7 @@ Map<String, List<MultimediaItem>> _parseHomeResults(dynamic result) {
 List<MultimediaItem> _parseSearchResults(dynamic result) {
   if (result is List) {
     return result
-        .map((e) => MultimediaItem.fromJson(Map<String, dynamic>.from(e)))
+        .map((e) => MultimediaItem.fromJson(Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
         .toList();
   }
   return [];
@@ -141,6 +142,7 @@ class JsBasedProvider extends SkyStreamProvider {
                       search: (typeof search !== 'undefined') ? search : (typeof globalThis.search !== 'undefined' ? globalThis.search : undefined),
                       load: (typeof load !== 'undefined') ? load : (typeof globalThis.load !== 'undefined' ? globalThis.load : undefined),
                       loadStreams: (typeof loadStreams !== 'undefined') ? loadStreams : (typeof globalThis.loadStreams !== 'undefined' ? globalThis.loadStreams : undefined),
+                      getProviders: (typeof getProviders !== 'undefined') ? getProviders : (typeof globalThis.getProviders !== 'undefined' ? globalThis.getProviders : undefined),
                   };
               })();
               globalThis['$_namespace'] = exports;
@@ -149,6 +151,7 @@ class JsBasedProvider extends SkyStreamProvider {
               if (globalThis.search) delete globalThis.search;
               if (globalThis.load) delete globalThis.load;
               if (globalThis.loadStreams) delete globalThis.loadStreams;
+              if (globalThis.getProviders) delete globalThis.getProviders;
           })();
           """;
   }
@@ -306,6 +309,29 @@ class JsBasedProvider extends SkyStreamProvider {
         return ProviderType.livestream;
       default:
         return ProviderType.other;
+    }
+  }
+
+  /// Calls the JS `getProviders()` export to fetch the live provider list.
+  /// `invokeAsync` unwraps `{success:true, data:[...]}` automatically, so
+  /// `result` is the raw List. Returns an empty list if not exported or on error.
+  Future<List<PluginSubProvider>> getProviders() async {
+    await _ensureReady();
+    if (_error != null) return [];
+    try {
+      final result = await _jsEngine.invokeAsync(_fn('getProviders'));
+      if (result is List) {
+        return result
+            .whereType<Map<dynamic, dynamic>>()
+            .map((e) => PluginSubProvider.fromJson(Map<String, dynamic>.from(e)))
+            .where((p) => p.id.isNotEmpty)
+            .toList();
+      }
+      if (kDebugMode) debugPrint('JsBasedProvider: getProviders returned unexpected type: ${result.runtimeType}');
+      return [];
+    } catch (e) {
+      if (kDebugMode) debugPrint('JsBasedProvider: getProviders error for $_packageName: $e');
+      return [];
     }
   }
 

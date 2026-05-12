@@ -200,6 +200,10 @@ class ExtensionManager extends _$ExtensionManager {
   /// loaded lazily on the first search/getHome/getDetails/loadStreams call.
   /// Sub-providers sharing the same JS file reuse one shared read Future so the
   /// file is only read from disk once regardless of how many sub-providers exist.
+  ///
+  /// Dynamic provider mode: when plugin.json has `"providers": []` (empty array),
+  /// a bootstrap JsBasedProvider is created to call `getProviders()` and fetch
+  /// the live list, then fan-out into sub-providers exactly like the static path.
   Future<List<SkyStreamProvider>> _loadPlugin(ExtensionPlugin plugin) async {
     if (_engine == null || _storageService == null) return [];
     try {
@@ -234,7 +238,70 @@ class ExtensionManager extends _$ExtensionManager {
 
       final baseNamespace = plugin.packageName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
 
-      // Fan-out: one JS file → multiple lazy provider shells
+      // ── Dynamic provider mode ─────────────────────────────────────────────
+      // Triggered when plugin.json has "providers": [] (empty array).
+      // We create one bootstrap shell just to call getProviders(), then
+      // fan-out into namespaced sub-providers exactly like the static path.
+      // The bootstrap and all sub-providers share the same .qbc bytecode, so
+      // there is NO extra JS evaluation vs a static provider list.
+      if (plugin.providers != null && plugin.providers!.isEmpty) {
+        if (kDebugMode) debugPrint("ExtensionManager: Dynamic providers mode for ${plugin.packageName}");
+        talker.debug("ExtensionManager: Dynamic providers mode for ${plugin.packageName}");
+
+        // Bootstrap shell — uses the plugin's own namespace so the bytecode
+        // path is stable and shared with all sub-providers below.
+        final bootstrap = JsBasedProvider(
+          _engine!,
+          path,
+          packageName: plugin.packageName,
+          namespace: '${baseNamespace}__bootstrap',
+          manifest: plugin.manifest,
+          scriptLoader: sharedScriptLoader,
+        );
+
+        // Precompile bytecode so subsequent sub-provider loads are instant.
+        await bootstrap.precompile();
+
+        // Fetch the live provider list. This triggers one loadBytes()/loadScript()
+        // call — the same cost the first sub-provider would incur anyway.
+        final dynamicProviders = await bootstrap.getProviders();
+
+        if (dynamicProviders.isEmpty) {
+          if (kDebugMode) debugPrint("ExtensionManager: getProviders() returned empty list for ${plugin.packageName}");
+          talker.warning("ExtensionManager: getProviders() returned empty list for ${plugin.packageName}");
+          return [];
+        }
+
+        if (kDebugMode) debugPrint("ExtensionManager: Got ${dynamicProviders.length} dynamic providers for ${plugin.packageName}");
+        talker.debug("ExtensionManager: Got ${dynamicProviders.length} dynamic providers for ${plugin.packageName}");
+
+        // Fan-out — identical structure to the static path below.
+        final results = <SkyStreamProvider>[];
+        for (final sub in dynamicProviders) {
+          if (!_isSubProviderEnabled(plugin.packageName, sub.id)) continue;
+          final subId = sub.id.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+          results.add(JsBasedProvider(
+            _engine!,
+            path,
+            packageName: '${plugin.packageName}::${sub.id}',
+            jsPackageName: plugin.packageName,
+            namespace: '${baseNamespace}__$subId',
+            forcedName: sub.name,
+            manifest: plugin.manifest,
+            customBaseUrl: sub.baseUrl,
+            providerId: sub.baseUrl == null ? sub.id : null,
+            scriptLoader: sharedScriptLoader,
+          ));
+        }
+        if (kDebugMode) debugPrint("ExtensionManager: Registered ${results.length} dynamic sub-providers for ${plugin.packageName}");
+        // No-ops since bootstrap already compiled the .qbc for this path.
+        for (final p in results) {
+          if (p is JsBasedProvider) p.precompile().ignore();
+        }
+        return results;
+      }
+
+      // ── Static provider fan-out ───────────────────────────────────────────
       if (plugin.providers != null && plugin.providers!.isNotEmpty) {
         final results = <SkyStreamProvider>[];
         for (final sub in plugin.providers!) {
@@ -261,7 +328,7 @@ class ExtensionManager extends _$ExtensionManager {
         return results;
       }
 
-      // Single provider shell
+      // ── Single provider shell ─────────────────────────────────────────────
       final settings = ref.read(settingsRepositoryProvider);
       final customBaseUrl = settings.getCustomBaseUrl(plugin.packageName);
       final provider = JsBasedProvider(
