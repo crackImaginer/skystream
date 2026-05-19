@@ -51,6 +51,15 @@ class _CardsWrapperState extends State<CardsWrapper>
   }
 
   @override
+  void didUpdateWidget(covariant CardsWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusNode != oldWidget.focusNode) {
+      if (oldWidget.focusNode == null) _node.dispose();
+      _node = widget.focusNode ?? FocusNode();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     if (widget.focusNode == null) _node.dispose();
@@ -77,6 +86,43 @@ class _CardsWrapperState extends State<CardsWrapper>
       _isFocused = hasFocus;
     });
     _updateAnimation();
+    if (hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final ro = context.findRenderObject();
+        if (ro is! RenderBox || !ro.hasSize) return;
+        const duration = Duration(milliseconds: 380);
+        const curve = Curves.fastOutSlowIn;
+
+        // Horizontal: always center the focused card inside its row so the
+        // active card stays in the middle of the screen as the user walks
+        // along the row.
+        Scrollable.maybeOf(context, axis: Axis.horizontal)
+            ?.position
+            .ensureVisible(ro, alignment: 0.5, duration: duration, curve: curve);
+
+        // Vertical: only scroll if the card is actually clipped. Moving
+        // Left/Right within a row would otherwise re-center the row
+        // vertically on every keystroke and the whole screen would jump.
+        final vScroll = Scrollable.maybeOf(context, axis: Axis.vertical);
+        if (vScroll != null) {
+          final scrollBox = vScroll.context.findRenderObject();
+          if (scrollBox is RenderBox && scrollBox.hasSize) {
+            final top = ro.localToGlobal(Offset.zero, ancestor: scrollBox).dy;
+            final bottom = top + ro.size.height;
+            final viewportH = scrollBox.size.height;
+            if (top < 0 || bottom > viewportH) {
+              vScroll.position.ensureVisible(
+                ro,
+                alignment: 0.5,
+                duration: duration,
+                curve: curve,
+              );
+            }
+          }
+        }
+      });
+    }
   }
 
   void _onHover(bool isHovered) {
