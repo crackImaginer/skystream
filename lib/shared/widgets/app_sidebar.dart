@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 
+/// Number of destinations rendered by [AppSidebar]. Used by [AppScaffold] to
+/// size its own FocusNode list so the two stay in sync — change this and the
+/// destinations list together.
+const int kSidebarDestinationCount = 5;
+
 class AppSidebar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onItemTapped;
@@ -28,6 +33,14 @@ class AppSidebar extends StatelessWidget {
       (Icons.library_books_outlined, Icons.library_books, l10n.library),
       (Icons.settings_outlined, Icons.settings, l10n.settings),
     ];
+    assert(
+      destinations.length == kSidebarDestinationCount,
+      'kSidebarDestinationCount must match the destinations list length',
+    );
+    assert(
+      focusNodes.length == destinations.length,
+      'Sidebar focusNodes count must match destinations count',
+    );
 
     return Material(
       color: bgColor,

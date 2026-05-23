@@ -58,6 +58,42 @@ class _FocusableItemState extends State<FocusableItem>
     }
   }
 
+  void _scrollIntoViewOnFocus() {
+    // Mirror CardsWrapper: keep the focused item centered horizontally in
+    // its scrollable row; only adjust the vertical scroll when the item is
+    // actually clipped, otherwise Left/Right within a visible row would
+    // re-center the row vertically on every keystroke.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ro = context.findRenderObject();
+      if (ro is! RenderBox || !ro.hasSize) return;
+      const duration = Duration(milliseconds: 380);
+      const curve = Curves.fastOutSlowIn;
+
+      Scrollable.maybeOf(context, axis: Axis.horizontal)
+          ?.position
+          .ensureVisible(ro, alignment: 0.5, duration: duration, curve: curve);
+
+      final vScroll = Scrollable.maybeOf(context, axis: Axis.vertical);
+      if (vScroll != null) {
+        final scrollBox = vScroll.context.findRenderObject();
+        if (scrollBox is RenderBox && scrollBox.hasSize) {
+          final top = ro.localToGlobal(Offset.zero, ancestor: scrollBox).dy;
+          final bottom = top + ro.size.height;
+          final viewportH = scrollBox.size.height;
+          if (top < 0 || bottom > viewportH) {
+            vScroll.position.ensureVisible(
+              ro,
+              alignment: 0.5,
+              duration: duration,
+              curve: curve,
+            );
+          }
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
@@ -66,6 +102,7 @@ class _FocusableItemState extends State<FocusableItem>
           _isFocused = focused;
         });
         _updateState();
+        if (focused) _scrollIntoViewOnFocus();
       },
       onShowHoverHighlight: (hovered) {
         setState(() {

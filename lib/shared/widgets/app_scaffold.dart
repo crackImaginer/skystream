@@ -20,10 +20,10 @@ class AppScaffold extends ConsumerStatefulWidget {
 
 class _AppScaffoldState extends ConsumerState<AppScaffold> {
   // Owned here so the content-area LEFT key handler can focus them directly,
-  // crossing the Branch Navigator's FocusScope boundary.
-  static const _sidebarItemCount = 5;
+  // crossing the Branch Navigator's FocusScope boundary. Count comes from
+  // [kSidebarDestinationCount] in app_sidebar.dart — single source of truth.
   late final List<FocusNode> _sidebarNodes = List.generate(
-    _sidebarItemCount,
+    kSidebarDestinationCount,
     (i) => FocusNode(debugLabel: 'sidebar_$i'),
   );
 
@@ -59,18 +59,38 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
     }
   }
 
-  // Intercepts D-pad LEFT before DpadNavigator's CallbackShortcuts can consume
-  // it, because this Focus sits above the Branch Navigator in the focus tree.
-  // From inside the Branch scope, focusInDirection(left) can't reach the
-  // sidebar (different FocusScope), so we focus the sidebar item explicitly.
+  // Intercepts D-pad LEFT only when the currently focused widget has no
+  // focusable neighbour to the left within the content area. In that case we
+  // explicitly focus the sidebar item (different FocusScope, so directional
+  // traversal can't bridge it on its own). Otherwise we let the event continue
+  // so normal in-row navigation works.
   KeyEventResult _onContentKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      final idx = widget.navigationShell.currentIndex;
-      _sidebarNodes[idx].requestFocus();
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.ignored;
+    }
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null) return KeyEventResult.ignored;
+
+    final moved = primary.focusInDirection(TraversalDirection.left);
+    if (moved) {
       return KeyEventResult.handled;
     }
-    return KeyEventResult.ignored;
+    // No focusable to the left in this scope — fall back to sidebar. Bail
+    // back to ignored if the target node is out of range or unfocusable so
+    // we don't silently swallow the Left key when focus can't move.
+    final idx = widget.navigationShell.currentIndex;
+    if (idx < 0 || idx >= _sidebarNodes.length) {
+      return KeyEventResult.ignored;
+    }
+    final target = _sidebarNodes[idx];
+    if (!target.canRequestFocus) {
+      return KeyEventResult.ignored;
+    }
+    target.requestFocus();
+    return KeyEventResult.handled;
   }
 
   @override

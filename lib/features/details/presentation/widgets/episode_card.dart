@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
@@ -98,26 +99,115 @@ class EpisodeCard extends HookConsumerWidget {
       return null;
     }, [episode.url, isDownloading]);
 
-    return InkWell(
-      onTap: () => ref
-          .read(detailsControllerProvider(parentItem.url).notifier)
-          .handlePlayPress(context, parentItem, specificEpisode: episode),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12.0),
-          border: Border.all(
-            color: Theme.of(context).dividerColor.withValues(
-              alpha: Theme.of(context).brightness == Brightness.dark
-                  ? 0.1
-                  : 0.5,
+    final isFocused = useState(false);
+    final downloadFocusNode = useFocusNode(debugLabel: 'ep_download');
+    final bodyFocusNode = useFocusNode(debugLabel: 'ep_body');
+    final primary = Theme.of(context).colorScheme.primary;
+
+    void triggerDownload() {
+      if (downloadedFile != null) {
+        DownloadManagementDialog.show(
+          context,
+          details ?? parentItem,
+          downloadedFile,
+          episode: episode,
+        );
+      } else if (isDownloading) {
+        DownloadProgressDialog.show(
+          context,
+          '${parentItem.title} - ${episode.name}',
+          episode.url,
+        );
+      } else {
+        ref
+            .read(downloadLauncherProvider)
+            .launch(context, parentItem, episodeUrl: episode.url);
+      }
+    }
+
+    return Focus(
+      // Passive observer — let the inner InkWell be the real focus target so
+      // OK plays and Right can traverse into the download icon (a descendant).
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (f) {
+        isFocused.value = f;
+        if (f) {
+          // Center the focused episode in the viewport when reachable.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final ctx = FocusManager.instance.primaryFocus?.context;
+            final ro = ctx?.findRenderObject();
+            if (ctx != null && ctx.mounted && ro != null) {
+              Scrollable.maybeOf(ctx)?.position.ensureVisible(
+                    ro,
+                    alignment: 0.5,
+                    duration: const Duration(milliseconds: 380),
+                    curve: Curves.fastOutSlowIn,
+                  );
+            }
+          });
+        }
+      },
+      // Reserved key bindings on a focused episode pill:
+      //   • Menu (≡) → trigger download (start / open progress / manage)
+      //   • Long-press OK (key repeat on select/enter) → same as Menu
+      //   • Right arrow (when body is focused) → focus the download icon
+      // OK / Enter / Space still play the episode (via the InkWell).
+      onKeyEvent: (node, event) {
+        final isMenu = event.logicalKey == LogicalKeyboardKey.contextMenu ||
+            event.logicalKey == LogicalKeyboardKey.f10;
+        if (event is KeyDownEvent && isMenu) {
+          triggerDownload();
+          return KeyEventResult.handled;
+        }
+        if (event is KeyRepeatEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter)) {
+          triggerDownload();
+          return KeyEventResult.handled;
+        }
+        // No explicit Right handling here — let Flutter's default
+        // directional traversal pick the right target. In multi-column
+        // grids that's the next card; in single-column layouts users can
+        // press Menu (or long-press OK, both handled above) for download.
+        return KeyEventResult.ignored;
+      },
+      child: InkWell(
+        focusNode: bodyFocusNode,
+        onTap: () => ref
+            .read(detailsControllerProvider(parentItem.url).notifier)
+            .handlePlayPress(context, parentItem, specificEpisode: episode),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: width,
+          decoration: BoxDecoration(
+            color: isFocused.value
+                ? primary.withValues(alpha: 0.18)
+                : Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(
+              color: isFocused.value
+                  ? primary
+                  : Theme.of(context).dividerColor.withValues(
+                      alpha: Theme.of(context).brightness == Brightness.dark
+                          ? 0.1
+                          : 0.5,
+                    ),
+              width: isFocused.value ? 2 : 1,
             ),
+            boxShadow: isFocused.value
+                ? [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.45),
+                      blurRadius: 14,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
           ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        padding: const EdgeInsets.all(LayoutConstants.spacingSm),
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(LayoutConstants.spacingSm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -139,6 +229,10 @@ class EpisodeCard extends HookConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: LayoutConstants.spacingXs),
+                // Download icon — uses an explicit FocusNode so the parent
+                // onKeyEvent can force focus here from the body. Left from
+                // the icon returns focus to the body via this widget's own
+                // onKeyEvent.
                 _buildActionButtons(
                   context,
                   ref,
@@ -147,6 +241,8 @@ class EpisodeCard extends HookConsumerWidget {
                   downloadProgress,
                   downloadProgressData,
                   details,
+                  downloadFocusNode,
+                  bodyFocusNode,
                 ),
               ],
             ),
@@ -170,11 +266,40 @@ class EpisodeCard extends HookConsumerWidget {
             ],
           ],
         ),
+        ),
       ),
     );
   }
 
   Widget _buildActionButtons(
+    BuildContext context,
+    WidgetRef ref,
+    File? downloadedFile,
+    bool isDownloading,
+    double downloadProgress,
+    DownloadProgressData? downloadProgressData,
+    MultimediaItem? details,
+    FocusNode focusNode,
+    FocusNode bodyFocusNode,
+  ) {
+    final raw = _buildRawActionButton(
+      context,
+      ref,
+      downloadedFile,
+      isDownloading,
+      downloadProgress,
+      downloadProgressData,
+      details,
+    );
+    if (raw == null) return const SizedBox.shrink();
+    return _FocusableActionWrapper(
+      focusNode: focusNode,
+      bodyFocusNode: bodyFocusNode,
+      child: raw,
+    );
+  }
+
+  Widget? _buildRawActionButton(
     BuildContext context,
     WidgetRef ref,
     File? downloadedFile,
@@ -343,6 +468,68 @@ class EpisodeCard extends HookConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Wraps the small download icon so D-pad / Tab focus is unmistakable when it
+/// has focus (the IconButton's default focus ring is too subtle on TV).
+class _FocusableActionWrapper extends StatefulWidget {
+  final Widget child;
+  final FocusNode focusNode;
+  final FocusNode bodyFocusNode;
+  const _FocusableActionWrapper({
+    required this.child,
+    required this.focusNode,
+    required this.bodyFocusNode,
+  });
+
+  @override
+  State<_FocusableActionWrapper> createState() =>
+      _FocusableActionWrapperState();
+}
+
+class _FocusableActionWrapperState extends State<_FocusableActionWrapper> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Focus(
+      focusNode: widget.focusNode,
+      onFocusChange: (f) => setState(() => _focused = f),
+      onKeyEvent: (node, event) {
+        // Left from the download icon returns focus to the card body.
+        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+            event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+            widget.bodyFocusNode.canRequestFocus) {
+          widget.bodyFocusNode.requestFocus();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: _focused ? primary.withValues(alpha: 0.22) : null,
+          border: Border.all(
+            color: _focused ? primary : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: _focused
+              ? [
+                  BoxShadow(
+                    color: primary.withValues(alpha: 0.5),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: widget.child,
+      ),
     );
   }
 }
