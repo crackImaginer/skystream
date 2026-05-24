@@ -126,9 +126,6 @@ class _AppScaffoldState extends ConsumerState<AppScaffold> {
                     ),
                   ),
                   // Content in its own traversal group.
-                  // The inner Focus wrapper intercepts LEFT before it can
-                  // escape to CallbackShortcuts, then explicitly focuses the
-                  // correct sidebar item — bypassing the FocusScope boundary.
                   Expanded(
                     child: FocusTraversalGroup(
                       policy: WidgetOrderTraversalPolicy(),

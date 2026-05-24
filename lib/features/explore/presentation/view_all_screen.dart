@@ -10,6 +10,7 @@ import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/utils/image_utils.dart';
 import 'controllers/view_all_controller.dart';
 
 enum ViewAllCategory {
@@ -21,6 +22,10 @@ enum ViewAllCategory {
   topRatedTV,
   airingTodayTV,
   trending,
+
+  /// Provider-sourced content from the home screen.
+  /// No TMDB pagination — shows only the initial list.
+  providerContent,
 }
 
 class ViewAllScreen extends ConsumerStatefulWidget {
@@ -28,11 +33,16 @@ class ViewAllScreen extends ConsumerStatefulWidget {
   final List<MultimediaItem> initialMediaList;
   final ViewAllCategory category;
 
+  /// Custom tap handler for items (used by provider content to go to
+  /// DetailsRoute instead of TmdbDetailsRoute).
+  final void Function(MultimediaItem item)? onTap;
+
   const ViewAllScreen({
     super.key,
     required this.title,
     required this.initialMediaList,
     required this.category,
+    this.onTap,
   });
 
   @override
@@ -40,18 +50,35 @@ class ViewAllScreen extends ConsumerStatefulWidget {
 }
 
 class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
-  late final ScrollController _scrollController;
+  final ScrollController _scrollController = ScrollController();
+  bool _isPortrait = true;
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController()..addListener(_onScroll);
+    _scrollController.addListener(_onScroll);
+    if (widget.initialMediaList.isNotEmpty) {
+      _checkAspectRatio();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(viewAllControllerProvider(widget.category).notifier)
           .init(widget.initialMediaList);
       _checkInitialFill();
     });
+  }
+
+  void _checkAspectRatio() async {
+    if (widget.initialMediaList.isEmpty) return;
+    final url = widget.initialMediaList.first.posterImageUrl;
+    if (url == null || url.isEmpty) return;
+    
+    final isPortrait = await ImageUtils.isImagePortrait(url);
+    if (mounted && _isPortrait != isPortrait) {
+      setState(() {
+        _isPortrait = isPortrait;
+      });
+    }
   }
 
   void _checkInitialFill() {
@@ -95,12 +122,14 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       viewAllControllerProvider(widget.category),
     );
 
-    // Calculate aspect ratio for 2:3 posters
+    // Calculate aspect ratio dynamically
     final isDesktop = context.isDesktop;
-    final maxExtent = isDesktop ? 240.0 : 150.0;
+    final maxExtent = isDesktop 
+        ? (_isPortrait ? 240.0 : 340.0) 
+        : (_isPortrait ? 150.0 : 220.0);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final crossAxisCount = (screenWidth / maxExtent).ceil();
-    const childAspectRatio = 0.55;
+    final childAspectRatio = _isPortrait ? 0.55 : 1.35;
 
     ref.listen(viewAllControllerProvider(widget.category), (previous, next) {
       if (next.items.isEmpty && !next.isLoading && next.page == 1) {
@@ -116,14 +145,9 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
           widget.title,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        leading: CustomButton(
-          shape: const CircleBorder(),
-          backgroundColor: Colors.black45,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
-          child: const Icon(
-            Icons.arrow_back_rounded,
-            color: Colors.white,
-          ),
         ),
         elevation: 0,
       ),
@@ -166,13 +190,18 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
               imageUrl: imageUrl,
               title: itemTitle,
               heroTag: uniqueTag,
+              isPortrait: _isPortrait,
               onTap: () {
-                TmdbDetailsRoute(
-                  movieId: item.id,
-                  mediaType: item.tmdbMediaType,
-                  heroTag: uniqueTag,
-                  placeholderPoster: imageUrl,
-                ).push(context);
+                if (widget.onTap != null) {
+                  widget.onTap!(item);
+                } else {
+                  TmdbDetailsRoute(
+                    movieId: item.id,
+                    mediaType: item.tmdbMediaType,
+                    heroTag: uniqueTag,
+                    placeholderPoster: imageUrl,
+                  ).push(context);
+                }
               },
             );
           },

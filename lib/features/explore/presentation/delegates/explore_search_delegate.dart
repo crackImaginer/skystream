@@ -147,37 +147,40 @@ class _SearchSuggestionsListState
         final year = item.releaseDate.split('-').first;
         final mediaType = item.mediaType;
 
-        return ListTile(
-          leading: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: CachedNetworkImage(
-              imageUrl: item.thumbnailImageUrl,
-              width: 40,
-              height: 60,
-              fit: BoxFit.cover,
-              placeholder: (_, _) => ShimmerPlaceholder(borderRadius: 4),
+        return Material(
+          type: MaterialType.transparency,
+          child: ListTile(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: CachedNetworkImage(
+                imageUrl: item.thumbnailImageUrl,
+                width: 40,
+                height: 60,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => ShimmerPlaceholder(borderRadius: 4),
+              ),
             ),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-          ),
-          subtitle: Text(
-            '$mediaType ${year.isNotEmpty ? '($year)' : ''}',
-            style: TextStyle(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-              fontSize: 12,
+            title: Text(
+              title,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             ),
+            subtitle: Text(
+              '$mediaType ${year.isNotEmpty ? '($year)' : ''}',
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                fontSize: 12,
+              ),
+            ),
+            onTap: () {
+              TmdbDetailsRoute(
+                movieId: item.id,
+                mediaType: item.tmdbMediaType,
+                heroTag: 'search_${item.id}',
+              ).push(context);
+            },
           ),
-          onTap: () {
-            TmdbDetailsRoute(
-              movieId: item.id,
-              mediaType: item.tmdbMediaType,
-              heroTag: 'search_${item.id}',
-            ).push(context);
-          },
         );
       },
     );

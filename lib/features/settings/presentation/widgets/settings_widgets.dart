@@ -108,34 +108,37 @@ class _SettingsTileState extends State<SettingsTile> {
                 width: 2,
               ),
             ),
-            child: ListTile(
-              focusColor: Colors.transparent,
-              hoverColor: primary.withValues(alpha: 0.10),
-              leading: Container(
-                padding: const EdgeInsets.all(LayoutConstants.spacingXs),
-                decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+            child: Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                focusColor: Colors.transparent,
+                hoverColor: primary.withValues(alpha: 0.10),
+                leading: Container(
+                  padding: const EdgeInsets.all(LayoutConstants.spacingXs),
+                  decoration: BoxDecoration(
+                    color: primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(widget.icon, color: primary, size: 20),
                 ),
-                child: Icon(widget.icon, color: primary, size: 20),
-              ),
-              title: Text(
-                widget.title,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              subtitle: widget.subtitle != null
-                  ? Text(
-                      widget.subtitle!,
-                      style: TextStyle(
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    )
-                  : null,
-              trailing: widget.trailing ??
-                  const Icon(Icons.chevron_right_rounded, size: 20),
-              onTap: widget.onTap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                title: Text(
+                  widget.title,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: widget.subtitle != null
+                    ? Text(
+                        widget.subtitle!,
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      )
+                    : null,
+                trailing: widget.trailing ??
+                    const Icon(Icons.chevron_right_rounded, size: 20),
+                onTap: widget.onTap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),

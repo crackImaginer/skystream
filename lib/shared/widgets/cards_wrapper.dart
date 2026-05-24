@@ -13,7 +13,7 @@ class CardsWrapper extends StatefulWidget {
     super.key,
     required this.child,
     required this.onTap,
-    this.scaleFactor = 1.05,
+    this.scaleFactor = 1.03,
     this.autoFocus = false,
     this.borderRadius,
     this.focusNode,

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import 'package:skystream/core/utils/layout_constants.dart';
+import 'package:skystream/core/utils/responsive_breakpoints.dart';
 
 /// Number of destinations rendered by [AppSidebar]. Used by [AppScaffold] to
 /// size its own FocusNode list so the two stay in sync — change this and the
 /// destinations list together.
 const int kSidebarDestinationCount = 5;
 
-class AppSidebar extends StatelessWidget {
+class AppSidebar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onItemTapped;
   // FocusNodes owned by the parent scaffold so the content-area key handler
@@ -22,15 +24,31 @@ class AppSidebar extends StatelessWidget {
   });
 
   @override
+  State<AppSidebar> createState() => _AppSidebarState();
+}
+
+class _AppSidebarState extends State<AppSidebar> {
+  bool _isExpanded = true;
+
+  void _toggleSidebar() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final bgColor = Theme.of(context).appBarTheme.backgroundColor;
+    final theme = Theme.of(context);
+
+    // Sidebar background: seamless with scaffold
+    final bgColor = theme.scaffoldBackgroundColor;
 
     final destinations = [
       (Icons.home_outlined, Icons.home, l10n.home),
       (Icons.search, Icons.search, l10n.search),
       (Icons.explore_outlined, Icons.explore, l10n.explore),
-      (Icons.library_books_outlined, Icons.library_books, l10n.library),
+      (Icons.video_library_outlined, Icons.video_library, l10n.library),
       (Icons.settings_outlined, Icons.settings, l10n.settings),
     ];
     assert(
@@ -38,29 +56,130 @@ class AppSidebar extends StatelessWidget {
       'kSidebarDestinationCount must match the destinations list length',
     );
     assert(
-      focusNodes.length == destinations.length,
+      widget.focusNodes.length == destinations.length,
       'Sidebar focusNodes count must match destinations count',
     );
 
     return Material(
       color: bgColor,
-      elevation: 8,
-      child: SizedBox(
-        width: 80,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(destinations.length, (i) {
-            final (outlinedIcon, filledIcon, label) = destinations[i];
-            final isSelected = currentIndex == i;
-            return _SidebarItem(
-              focusNode: focusNodes[i],
-              icon: isSelected ? filledIcon : outlinedIcon,
-              label: label,
-              isSelected: isSelected,
-              onTap: () => onItemTapped(i),
-            );
-          }),
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            width: _isExpanded
+                ? LayoutConstants.sidebarWidthExpanded
+                : LayoutConstants.sidebarWidthCompact,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isFullyExpanded = constraints.maxWidth > 160;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Hamburger and Branding
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        height: LayoutConstants.dashboardHeaderHeight,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: isFullyExpanded
+                              ? MainAxisAlignment.start
+                              : MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.menu),
+                              onPressed: _toggleSidebar,
+                              color: theme.colorScheme.onSurface,
+                              splashRadius: 24,
+                            ),
+                            if (isFullyExpanded) ...[
+                              Image.asset(
+                                'assets/images/ic_launcher_foreground.png',
+                              ),
+                              Expanded(
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: 'SkyStream',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.colorScheme.onSurface,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: '.',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    if (isFullyExpanded)
+                      const SizedBox(height: LayoutConstants.spacingSm),
+
+                    if (!isFullyExpanded)
+                      Center(
+                        child: Image.asset(
+                          'assets/images/ic_launcher_foreground.png',
+                        ),
+                      ),
+
+                    // Combined flat navigation list
+                    ...List.generate(destinations.length, (i) {
+                      final (outlinedIcon, filledIcon, label) = destinations[i];
+                      final isSelected = widget.currentIndex == i;
+                      return _SidebarItem(
+                        focusNode: widget.focusNodes[i],
+                        icon: isSelected ? filledIcon : outlinedIcon,
+                        label: label,
+                        isSelected: isSelected,
+                        isExpanded: isFullyExpanded,
+                        autofocus: i == 0 && context.isTv,
+                        onTap: () => widget.onItemTapped(i),
+                      );
+                    }),
+
+                    const Spacer(),
+                  ],
+                );
+              },
+            ),
+          ),
+          Container(
+            width: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  theme.colorScheme.primary.withValues(alpha: 0.05),
+                  theme.colorScheme.primary.withValues(alpha: 0.2),
+                  theme.colorScheme.primary.withValues(alpha: 0.5),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -71,14 +190,18 @@ class _SidebarItem extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final bool isExpanded;
   final VoidCallback onTap;
+  final bool autofocus;
 
   const _SidebarItem({
     required this.focusNode,
     required this.icon,
     required this.label,
     required this.isSelected,
+    required this.isExpanded,
     required this.onTap,
+    this.autofocus = false,
   });
 
   @override
@@ -90,11 +213,13 @@ class _SidebarItemState extends State<_SidebarItem> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
     final isActive = widget.isSelected || _isFocused;
 
     return Focus(
+      autofocus: widget.autofocus,
       focusNode: widget.focusNode,
       onFocusChange: (focused) => setState(() => _isFocused = focused),
       onKeyEvent: (node, event) {
@@ -108,15 +233,18 @@ class _SidebarItemState extends State<_SidebarItem> {
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: () {
+          widget.focusNode.requestFocus();
+          widget.onTap();
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: widget.isSelected
-                ? primary.withValues(alpha: 0.15)
+                ? primary.withValues(alpha: 0.1)
                 : Colors.transparent,
             border: _isFocused ? Border.all(color: primary, width: 2) : null,
             boxShadow: _isFocused
@@ -129,27 +257,45 @@ class _SidebarItemState extends State<_SidebarItem> {
                   ]
                 : null,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
+            mainAxisAlignment: widget.isExpanded
+                ? MainAxisAlignment.start
+                : MainAxisAlignment.center,
             children: [
+              // Active pill indicator (only when expanded, or adjust if you want it collapsed too)
+              if (widget.isExpanded)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 4,
+                  height: widget.isSelected ? 24 : 0,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: widget.isSelected ? primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               Icon(
                 widget.icon,
                 color: isActive ? primary : onSurfaceVariant,
-                size: 24,
+                size: widget.isExpanded ? 28 : 24,
               ),
-              const SizedBox(height: 4),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isActive ? primary : onSurfaceVariant,
-                  fontWeight:
-                      widget.isSelected ? FontWeight.w600 : FontWeight.normal,
+              if (widget.isExpanded) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: isActive ? primary : onSurfaceVariant,
+                      fontWeight: widget.isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              ],
             ],
           ),
         ),

@@ -1,3 +1,4 @@
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,7 @@ import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import 'dart:async';
+import 'widgets/dashboard_header_bar.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -39,6 +41,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(0);
   final ValueNotifier<bool> _isFabExtended = ValueNotifier<bool>(true);
   final FocusNode _firstActionFocusNode = FocusNode();
+
+  /// Carousel controller exposed by ExploreCarousel via [onControllerReady].
+  /// Used by DashboardHeaderBar arrows.
+  CarouselSliderController? _carouselController;
 
   @override
   bool get wantKeepAlive => true;
@@ -93,9 +99,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv == true || context.isTv;
+    final isWidescreen = isTv || context.isTabletOrLarger;
 
+    // On widescreen: no AppBar, no FAB — we use the DashboardHeaderBar instead.
+    if (isWidescreen) {
+      return Scaffold(
+        extendBodyBehindAppBar: false,
+        backgroundColor: Colors.transparent,
+        body: _buildBody(
+          context,
+          homeDataAsync,
+          history,
+          generalSettings.watchHistoryEnabled,
+          isWidescreen: true,
+        ),
+      );
+    }
+
+    // Mobile layout: existing AppBar + FAB
     return Scaffold(
-      extendBodyBehindAppBar: isTv ? false : true,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         systemOverlayStyle: overlayStyle,
         forceMaterialTransparency: true,
@@ -138,165 +161,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
             ),
           ),
-          if (!context.isMobile)
-            Padding(
-              padding: const EdgeInsets.only(right: LayoutConstants.spacingMd),
-              child: CardsWrapper(
-                onTap: () => ref.read(homeDataProvider.notifier).fetch(),
-                borderRadius: BorderRadius.circular(50),
-                child: CircleAvatar(
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.1),
-                  radius: 18,
-                  child: Icon(
-                    Icons.refresh,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
-          if (isTv)
-            Padding(
-              padding: const EdgeInsets.only(right: LayoutConstants.spacingMd),
-              child: CardsWrapper(
-                onTap: () => _showProviderSelector(context, ref),
-                borderRadius: BorderRadius.circular(50),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.extension,
-                        color: Theme.of(context).colorScheme.onSurface,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        ref.watch(activeProviderProvider)?.name ?? l10n.none,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
-      floatingActionButton: isTv
-          ? null
-          : ValueListenableBuilder<bool>(
-              valueListenable: _isFabExtended,
-              builder: (context, isFabExtended, _) {
-                return Material(
-                  elevation: 4,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Theme.of(context).dialogTheme.backgroundColor
-                      : Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _showProviderSelector(context, ref),
-                    child: Container(
-                      height: 56,
-                      constraints: const BoxConstraints(minWidth: 56),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isFabExtended ? 16 : 0,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.extension,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                            child: SizedBox(
-                              width: isFabExtended ? null : 0,
-                              child: isFabExtended
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(left: 12),
-                                      child: Builder(
-                                        builder: (context) {
-                                          final l10n = AppLocalizations.of(
-                                            context,
-                                          )!;
-                                          final active = ref.watch(
-                                            activeProviderProvider,
-                                          );
-                                          final isDebug =
-                                              active?.isDebug ?? false;
-                                          return Row(
-                                            children: [
-                                              Text(
-                                                active?.name ?? l10n.none,
-                                                style: TextStyle(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.fade,
-                                                softWrap: false,
+      floatingActionButton: ValueListenableBuilder<bool>(
+        valueListenable: _isFabExtended,
+        builder: (context, isFabExtended, _) {
+          return Material(
+            elevation: 4,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Theme.of(context).dialogTheme.backgroundColor
+                : Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _showProviderSelector(context, ref),
+              child: Container(
+                height: 56,
+                constraints: const BoxConstraints(minWidth: 56),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isFabExtended ? 16 : 0,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.extension,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: SizedBox(
+                        width: isFabExtended ? null : 0,
+                        child: isFabExtended
+                            ? Padding(
+                                padding: const EdgeInsets.only(left: 12),
+                                child: Builder(
+                                  builder: (context) {
+                                    final l10n = AppLocalizations.of(context)!;
+                                    final active = ref.watch(
+                                      activeProviderProvider,
+                                    );
+                                    final isDebug = active?.isDebug ?? false;
+                                    return Row(
+                                      children: [
+                                        Text(
+                                          active?.name ?? l10n.none,
+                                          style: TextStyle(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.fade,
+                                          softWrap: false,
+                                        ),
+                                        if (isDebug) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              l10n.debug,
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
                                               ),
-                                              if (isDebug) ...[
-                                                const SizedBox(width: 8),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 4,
-                                                        vertical: 2,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.red,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    l10n.debug,
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ),
-                        ],
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  },
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
+          );
+        },
+      ),
       body: _buildBody(
         context,
         homeDataAsync,
@@ -306,43 +264,92 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  Widget _buildWidescreenHeader(BuildContext context) {
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _HomeHeaderDelegate(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DashboardHeaderBar(
+            searchFocusNode: _firstActionFocusNode,
+            onShowProviderSelector: () => _showProviderSelector(context, ref),
+            onPrevious: _carouselController != null
+                ? () => _carouselController!.previousPage()
+                : null,
+            onNext: _carouselController != null
+                ? () => _carouselController!.nextPage()
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _wrapWithHeaderIfNeeded(BuildContext context, bool isWidescreen, Widget child) {
+    if (!isWidescreen) return child;
+    return CustomScrollView(
+      // Ensure we use the main scroll controller so opacity updates work
+      controller: _scrollController,
+      slivers: [
+        _buildWidescreenHeader(context),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: child,
+        ),
+      ],
+    );
+  }
+
   Widget _buildBody(
     BuildContext context,
     HomeState state,
     List<dynamic> history,
-    bool watchHistoryEnabled,
-  ) {
+    bool watchHistoryEnabled, {
+    bool isWidescreen = false,
+  }) {
     final l10n = AppLocalizations.of(context)!;
     final isResolving = ref.watch(providerResolutionLoadingProvider);
 
     if (isResolving) {
-      return Center(
-        child: CircularProgressIndicator(
-          color: Theme.of(context).colorScheme.primary,
+      return _wrapWithHeaderIfNeeded(
+        context,
+        isWidescreen,
+        Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
       );
     }
 
     if (ref.watch(activeProviderProvider) == null) {
-      return _buildNoProviderState(context, l10n);
+      return _wrapWithHeaderIfNeeded(
+        context,
+        isWidescreen,
+        _buildNoProviderState(context, l10n, isWidescreen: isWidescreen),
+      );
     }
 
     return switch (state) {
-      HomeLoading() => const Center(child: CircularProgressIndicator()),
-      HomeNoProvider() => _buildNoProviderState(context, l10n),
-      HomeOffline() => _buildErrorState(context, l10n.noInternetError, ref),
-      HomeError(:final message) => _buildErrorState(context, message, ref),
+      HomeLoading() => _wrapWithHeaderIfNeeded(context, isWidescreen, const Center(child: CircularProgressIndicator())),
+      HomeNoProvider() => _wrapWithHeaderIfNeeded(context, isWidescreen, _buildNoProviderState(context, l10n, isWidescreen: isWidescreen)),
+      HomeOffline() => _wrapWithHeaderIfNeeded(context, isWidescreen, _buildErrorState(context, l10n.noInternetError, ref)),
+      HomeError(:final message) => _wrapWithHeaderIfNeeded(context, isWidescreen, _buildErrorState(context, message, ref)),
       HomeSuccess(:final data) => RefreshIndicator(
         onRefresh: () async => ref.read(homeDataProvider.notifier).fetch(),
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
+            if (isWidescreen) _buildWidescreenHeader(context),
+
             if (data.containsKey('Trending'))
               SliverToBoxAdapter(
                 child: ExploreCarousel(
                   movies: data['Trending']!.take(7).toList(),
                   scrollController: _scrollController,
                   onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                  onControllerReady: (c) =>
+                      setState(() => _carouselController = c),
                   onTap: (item) {
                     DetailsRoute(
                       $extra: DetailsRouteExtra(item: item),
@@ -356,6 +363,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   movies: data.values.first.take(7).toList(),
                   scrollController: _scrollController,
                   onNavigateUp: () => _firstActionFocusNode.requestFocus(),
+                  onControllerReady: (c) =>
+                      setState(() => _carouselController = c),
                   onTap: (item) {
                     DetailsRoute(
                       $extra: DetailsRouteExtra(item: item),
@@ -363,9 +372,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   },
                 ),
               )
-            else
+            else if (!isWidescreen)
               // No carousel — add top padding so content below doesn't
-              // overlap with the transparent app bar.
+              // overlap with the transparent app bar (mobile only).
               SliverPadding(
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top + kToolbarHeight,
@@ -391,8 +400,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   return MediaHorizontalList(
                     title: entry.key,
                     mediaList: entry.value,
-                    category: ViewAllCategory.trending,
-                    showViewAll: false,
+                    category: ViewAllCategory.providerContent,
+                    showViewAll: true,
                     onTap: (item) {
                       DetailsRoute(
                         $extra: DetailsRouteExtra(item: item),
@@ -414,7 +423,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     };
   }
 
-  Widget _buildNoProviderState(BuildContext context, AppLocalizations l10n) {
+  Widget _buildNoProviderState(
+    BuildContext context,
+    AppLocalizations l10n, {
+    bool isWidescreen = false,
+  }) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -430,7 +443,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text(l10n.tapExtensionIcon),
+          if (isWidescreen) ...[
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _showProviderSelector(context, ref),
+              icon: const Icon(Icons.extension_rounded),
+              label: const Text('Select Provider'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    LayoutConstants.radiusPill,
+                  ),
+                ),
+              ),
+            ),
+          ] else
+            Text(l10n.tapExtensionIcon),
         ],
       ),
     );
@@ -660,8 +692,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         );
                         if (idx != -1) {
                           targetIndex = filter == null ? idx + 1 : idx;
+                        } else {
+                          targetIndex = 0;
                         }
                       }
+
+                      // If still -1 (e.g. activeProvider == null and filter != null), focus first item
+                      if (targetIndex == -1) targetIndex = 0;
 
                       if (!didInitialScroll && targetIndex != -1) {
                         didInitialScroll = true;
@@ -713,7 +750,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   child: ListTile(
                                     title: Text(l10n.none),
                                     leading: const Radio<String?>(value: null),
-                                    autofocus: index == 0,
+                                    autofocus: index == targetIndex,
                                     onTap: () {
                                       ref
                                           .read(activeProviderProvider.notifier)
@@ -752,7 +789,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               height: 56.0,
                               child: Center(
                                 child: ListTile(
-                                  autofocus: index == 0 && filter != null,
+                                  autofocus: index == targetIndex,
                                   title: Row(
                                     children: [
                                       Flexible(
@@ -864,5 +901,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       case ProviderType.other:
         return l10n.unknown;
     }
+  }
+}
+
+class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+
+  _HomeHeaderDelegate({required this.child});
+
+  @override
+  double get minExtent => LayoutConstants.dashboardHeaderHeight + 8; // padding top 8
+
+  @override
+  double get maxExtent => LayoutConstants.dashboardHeaderHeight + 8;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    // Add a solid background so content doesn't collide when scrolling behind it
+    return ColoredBox(
+      color: Theme.of(
+        context,
+      ).scaffoldBackgroundColor.withValues(alpha: shrinkOffset > 0 ? 0.9 : 1.0),
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _HomeHeaderDelegate oldDelegate) {
+    return oldDelegate.child != child;
   }
 }
