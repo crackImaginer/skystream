@@ -112,7 +112,8 @@ class _MovieCastListState extends State<MovieCastList> {
               imageUrl: actor.profileImageUrl ?? '',
               width: 80,
               height: 80,
-              memCacheWidth: 160, // 2× for crisp on hi-DPR
+              // No memCacheWidth — TMDB profile source is already w185 which
+              // matches 80 dp × 3 DPR. Forcing smaller blurs on hi-DPR.
               fit: BoxFit.cover,
               errorWidget: (_, _, _) =>
                   ThumbnailErrorPlaceholder(label: actor.name, iconSize: 30),
@@ -160,7 +161,7 @@ class _MovieCastListState extends State<MovieCastList> {
                 imageUrl: member.profileImageUrl ?? '',
                 width: 70,
                 height: 70,
-                memCacheWidth: 140,
+                // No memCacheWidth — see desktop branch above.
                 fit: BoxFit.cover,
                 errorWidget: (_, _, _) =>
                     ThumbnailErrorPlaceholder(label: member.name, iconSize: 30),

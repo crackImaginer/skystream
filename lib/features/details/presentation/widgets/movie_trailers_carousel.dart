@@ -152,7 +152,8 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
               CachedNetworkImage(
                 imageUrl: 'https://img.youtube.com/vi/$key/mqdefault.jpg',
                 fit: BoxFit.cover,
-                memCacheWidth: 480, // YouTube mqdefault is 320 wide; 1.5× DPR
+                // YouTube mqdefault is 320 px native; that's the source ceiling,
+                // memCacheWidth would only force downscale below that. Skip.
                 errorWidget: (_, _, _) => const ThumbnailErrorPlaceholder(),
               ),
               Container(color: Colors.black26),
@@ -192,7 +193,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
               CachedNetworkImage(
                 imageUrl: thumbUrl,
                 fit: BoxFit.cover,
-                memCacheWidth: 400, // Display 200, hi-DPR safe
+                // /0.jpg is 480 px native; let CNI decode at source.
                 errorWidget: (_, _, _) =>
                     ThumbnailErrorPlaceholder(label: video.name),
               ),

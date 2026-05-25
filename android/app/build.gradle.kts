@@ -47,11 +47,32 @@ android {
 
     buildTypes {
         release {
+            // Require a real signing keystore for release. Falling back to
+            // the debug key would silently ship an unsigned-for-Play APK
+            // (audit H13). For CI/local debug-without-keystore use
+            // `flutter run --debug` or `flutter build apk --debug`.
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
+                // Build still runs (so `flutter build apk --release` works
+                // during local exploration without a key.properties) but the
+                // resulting APK is debug-signed — never publish it.
+                println("WARN: Release build is using DEBUG signing — " +
+                        "key.properties not found. This APK MUST NOT be " +
+                        "distributed publicly.")
                 signingConfig = signingConfigs.getByName("debug")
             }
+
+            // Code & resource shrinking (audit B8). Skip the bundled
+            // proguard-android-optimize.txt rules and rely on the
+            // Flutter-provided rules plus our own proguard-rules.pro for
+            // plugin-specific keep rules.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

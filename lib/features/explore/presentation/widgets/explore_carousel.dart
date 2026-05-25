@@ -493,10 +493,10 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                       fit: BoxFit.cover,
                       height: height,
                       width: double.infinity,
-                      // Bound decode size to displayed height. The w1280 source
-                      // would otherwise be decoded at full source res into the
-                      // GPU even though we only ever display at heroHeight px.
-                      memCacheHeight: height.round(),
+                      // No memCacheHeight — source is w1280 (~720 px tall),
+                      // already bounded by the URL choice. Capping below
+                      // source just causes blur on hi-DPR phones without
+                      // saving meaningful memory.
                       placeholder: (context, url) => Container(
                         color: theme.colorScheme.surfaceContainerHighest,
                       ),

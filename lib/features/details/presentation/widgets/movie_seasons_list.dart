@@ -336,8 +336,8 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                 imageUrl: imageUrl ?? '',
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                // Card is 300 wide; decode at ~450 for hi-DPR.
-                                memCacheWidth: 450,
+                                // TMDB still source is w500 — already matches
+                                // 300 dp card × ~2 DPR. Let CNI decode native.
                                 placeholder: (context, url) =>
                                     ShimmerPlaceholder.rectangular(
                                       borderRadius: 8,
@@ -567,7 +567,8 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                 imageUrl: imageUrl ?? '',
                                 width: 120,
                                 height: 68,
-                                memCacheWidth: 240, // 2× for hi-DPR
+                                // Skip memCacheWidth — source w500 already
+                                // matches 120 dp × ~3 DPR ~ 360 px target.
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) =>
                                     ThumbnailErrorPlaceholder(

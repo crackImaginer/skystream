@@ -213,6 +213,19 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
 
+    case WM_GETMINMAXINFO: {
+      // Enforce a minimum window size in physical pixels — without this the
+      // user can drag the window to a zero-pixel slit. 800×600 logical
+      // matches the smallest layout we ship; scale by current DPI.
+      // Audit H12.
+      auto* minmax = reinterpret_cast<MINMAXINFO*>(lparam);
+      UINT dpi = FlutterDesktopGetDpiForHWND(hwnd);
+      double scale_factor = dpi / 96.0;
+      minmax->ptMinTrackSize.x = static_cast<LONG>(800 * scale_factor);
+      minmax->ptMinTrackSize.y = static_cast<LONG>(600 * scale_factor);
+      return 0;
+    }
+
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
