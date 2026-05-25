@@ -156,33 +156,41 @@ class SubtitleSearch extends _$SubtitleSearch {
     int completedProviders = 0;
 
     for (final provider in _providers) {
-      unawaited(provider.search(
-        query: query,
-        imdbId: imdbId,
-        tmdbId: tmdbId,
-        season: season,
-        episode: episode,
-        language: lang,
-        cancelToken: _cancelToken,
-      ).then((results) {
-        if (!ref.mounted || searchId != _activeSearchId) return;
+      unawaited(
+        provider
+            .search(
+              query: query,
+              imdbId: imdbId,
+              tmdbId: tmdbId,
+              season: season,
+              episode: episode,
+              language: lang,
+              cancelToken: _cancelToken,
+            )
+            .then((results) {
+              if (!ref.mounted || searchId != _activeSearchId) return;
 
-        if (results.isNotEmpty) {
-          allResults.addAll(results);
-          state = AsyncData(List.from(allResults));
-        }
-      }).catchError((Object e) {
-        if (e is DioException && e.type == DioExceptionType.cancel) return;
-        if (kDebugMode) debugPrint("${provider.name} search failed: $e");
-      }).whenComplete(() {
-        if (!ref.mounted || searchId != _activeSearchId) return;
+              if (results.isNotEmpty) {
+                allResults.addAll(results);
+                state = AsyncData(List.from(allResults));
+              }
+            })
+            .catchError((Object e) {
+              if (e is DioException && e.type == DioExceptionType.cancel)
+                return;
+              if (kDebugMode) debugPrint("${provider.name} search failed: $e");
+            })
+            .whenComplete(() {
+              if (!ref.mounted || searchId != _activeSearchId) return;
 
-        completedProviders++;
-        // If all finished and no results found, ensure we transition from loading to empty data
-        if (completedProviders == _providers.length && allResults.isEmpty) {
-          state = const AsyncData([]);
-        }
-      }));
+              completedProviders++;
+              // If all finished and no results found, ensure we transition from loading to empty data
+              if (completedProviders == _providers.length &&
+                  allResults.isEmpty) {
+                state = const AsyncData([]);
+              }
+            }),
+      );
     }
   }
 
@@ -255,13 +263,15 @@ class SubtitleSearch extends _$SubtitleSearch {
         // ZIP archive (most common for SubDL and SubSource).
         // Decode + extract on a worker isolate so the player UI doesn't
         // freeze while the user is actively watching (audit B12).
-        if (kDebugMode) debugPrint("[SubtitleDownload] Detected ZIP archive, extracting...");
+        if (kDebugMode)
+          debugPrint("[SubtitleDownload] Detected ZIP archive, extracting...");
         final extractedPath = await compute(
           _extractSubtitleFromZip,
           _SubtitleZipArgs(Uint8List.fromList(bytes), tempDir.path),
         );
         if (extractedPath != null) {
-          if (kDebugMode) debugPrint("[SubtitleDownload] ✅ Extracted: $extractedPath");
+          if (kDebugMode)
+            debugPrint("[SubtitleDownload] ✅ Extracted: $extractedPath");
           return extractedPath;
         }
         if (kDebugMode) {
@@ -271,7 +281,8 @@ class SubtitleSearch extends _$SubtitleSearch {
         }
       } else if (bytes.length > 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
         // GZIP compressed file — also offloaded to worker isolate.
-        if (kDebugMode) debugPrint("[SubtitleDownload] Detected GZIP, decompressing...");
+        if (kDebugMode)
+          debugPrint("[SubtitleDownload] Detected GZIP, decompressing...");
         final decompressed = await compute(
           _decompressGzip,
           Uint8List.fromList(bytes),

@@ -131,8 +131,7 @@ class TmdbDetails extends MultimediaItem {
         if (usRelease != null) {
           final certs =
               (usRelease as Map<String, dynamic>)['release_dates'] as List;
-          if (certs.isNotEmpty &&
-              (certs.first as Map)['certification'] != '') {
+          if (certs.isNotEmpty && (certs.first as Map)['certification'] != '') {
             certification =
                 (certs.first as Map<String, dynamic>)['certification']
                     as String;
@@ -170,8 +169,7 @@ class TmdbDetails extends MultimediaItem {
         : <TmdbSeason>[];
 
     final credits =
-        (json['credits'] as Map<String, dynamic>?) ??
-        const <String, dynamic>{};
+        (json['credits'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
     final castList = List<Map<String, dynamic>>.from(
       (credits['cast'] as List?) ?? const <dynamic>[],
     );

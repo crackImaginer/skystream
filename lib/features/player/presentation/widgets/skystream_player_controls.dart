@@ -398,10 +398,9 @@ class SkyStreamPlayerControlsState
     if (widget.isLoading || _duration == Duration.zero) return;
     if (_tapPosition != null) {
       unawaited(
-        ref.read(playerGestureHandlerProvider.notifier).handleDoubleTap(
-          _tapPosition!,
-          MediaQuery.sizeOf(context).width,
-        ),
+        ref
+            .read(playerGestureHandlerProvider.notifier)
+            .handleDoubleTap(_tapPosition!, MediaQuery.sizeOf(context).width),
       );
     }
   }

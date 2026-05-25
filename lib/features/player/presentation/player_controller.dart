@@ -2938,38 +2938,39 @@ class PlayerController extends Notifier<PlayerState> {
                 }
                 results[idx] = isHealthy;
 
-              // Walk candidates in preference order; stop at the first one
-              // whose result we have and which is healthy.
-              for (final c in candidates) {
-                if (!results.containsKey(c)) {
-                  break; // still waiting for a higher-priority one
-                }
-                if (results[c]!) {
-                  if (kDebugMode) {
-                    debugPrint("Stream $c is healthy (early-exit)");
+                // Walk candidates in preference order; stop at the first one
+                // whose result we have and which is healthy.
+                for (final c in candidates) {
+                  if (!results.containsKey(c)) {
+                    break; // still waiting for a higher-priority one
                   }
-                  completer.complete(c);
-                  return;
+                  if (results[c]!) {
+                    if (kDebugMode) {
+                      debugPrint("Stream $c is healthy (early-exit)");
+                    }
+                    completer.complete(c);
+                    return;
+                  }
                 }
-              }
-              // All results are in and all failed → fall back to start
-              if (results.length == candidates.length &&
-                  !completer.isCompleted) {
-                completer.complete(start);
-              }
-            })
-            .catchError((_) {
-              if (completer.isCompleted) return;
-              results[idx] = false;
-              _markSourceAttempt(
-                idx,
-                SourceAttemptStatus.failed,
-                isCurrent: false,
-              );
-              if (results.length == candidates.length) {
-                completer.complete(start);
-              }
-            }));
+                // All results are in and all failed → fall back to start
+                if (results.length == candidates.length &&
+                    !completer.isCompleted) {
+                  completer.complete(start);
+                }
+              })
+              .catchError((_) {
+                if (completer.isCompleted) return;
+                results[idx] = false;
+                _markSourceAttempt(
+                  idx,
+                  SourceAttemptStatus.failed,
+                  isCurrent: false,
+                );
+                if (results.length == candidates.length) {
+                  completer.complete(start);
+                }
+              }),
+        );
       }
 
       final winner = await completer.future;

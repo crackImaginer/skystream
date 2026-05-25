@@ -456,8 +456,11 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                   color: Theme.of(
                     context,
                   ).colorScheme.error.withValues(alpha: 0.1),
-                  child: Text(AppLocalizations.of(context)!
-                      .errorPrefix(detailsState.error.toString())),
+                  child: Text(
+                    AppLocalizations.of(
+                      context,
+                    )!.errorPrefix(detailsState.error.toString()),
+                  ),
                 )
               else if (!isMovie && details?.episodes != null)
                 DetailsSeasonListWrapper(itemUrl: widget.item.url),
