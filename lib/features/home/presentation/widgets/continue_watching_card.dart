@@ -213,6 +213,8 @@ class ContinueWatchingCard extends ConsumerWidget {
                           ) ??
                           '',
                       fit: BoxFit.cover,
+                      // Continue-watching card poster ~100-150 px wide; 2× for hi-DPR.
+                      memCacheWidth: 300,
                       placeholder: (context, url) =>
                           Container(color: Theme.of(context).dividerColor),
                       errorWidget: (_, _, _) =>

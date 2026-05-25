@@ -207,17 +207,17 @@ Future<List<MultimediaItem>> exploreHeroMovie(Ref ref) async {
         String? logoUrl;
         if (details['images'] != null) {
           final logos = List<Map<String, dynamic>>.from(
-            details['images']['logos'] ?? [],
+            ((details['images'] as Map<String, dynamic>)['logos'] as List?) ??
+                const <dynamic>[],
           );
           logoUrl = TmdbService.pickBestLogo(logos, lang);
         }
 
         String? genresStr;
         if (details['genres'] != null) {
-          genresStr = List<Map<String, dynamic>>.from(details['genres'])
-              .take(3)
-              .map((g) => g['name'])
-              .join(' • ');
+          genresStr = List<Map<String, dynamic>>.from(
+            details['genres'] as List,
+          ).take(3).map((g) => g['name']).join(' • ');
         }
 
         return movie.copyWith(

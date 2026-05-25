@@ -19,7 +19,7 @@ class TorrentFileParser {
     }
 
     final info = decoded['info'];
-    if (info == null) {
+    if (info == null || info is! Map) {
       throw Exception("Invalid torrent file: missing info dictionary");
     }
 

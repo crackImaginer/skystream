@@ -105,7 +105,7 @@ class TorrentService {
         throw Exception("Timed out waiting for torrent metadata");
       }
 
-      final int fileIndex = fileInfo['index'];
+      final int fileIndex = fileInfo['index'] as int;
 
       // Construct URL
       // Try to fetch from playlist first

@@ -70,8 +70,8 @@ class RepositoryService {
 
       final response = await _dio.request<String>(normalizedUrl);
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data is String
-            ? _jsonDecodeSafe(response.data!)
+        final Map<String, dynamic>? data = response.data is String
+            ? _jsonDecodeSafe(response.data!) as Map<String, dynamic>?
             : response.data as Map<String, dynamic>;
 
         if (data != null) {
@@ -126,12 +126,17 @@ class RepositoryService {
 
         if (response.statusCode == 200 && response.data != null) {
           final List<dynamic>? list = response.data is String
-              ? _jsonDecodeSafe(response.data) as List<dynamic>?
+              ? _jsonDecodeSafe(response.data as String) as List<dynamic>?
               : response.data as List<dynamic>?;
 
           if (list != null) {
             final plugins = list
-                .map((e) => ExtensionPlugin.fromJson(e, repo.packageName))
+                .map(
+                  (e) => ExtensionPlugin.fromJson(
+                    e as Map<String, dynamic>,
+                    repo.packageName,
+                  ),
+                )
                 .toList();
             allPlugins.addAll(plugins);
           }

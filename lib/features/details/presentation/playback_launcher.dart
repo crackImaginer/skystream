@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -69,11 +71,13 @@ class PlaybackLauncher {
         }
       });
     } else {
-      await PlayerRoute($extra: PlayerRouteExtra(
-        item: detailedItem ?? baseItem,
-        videoUrl: finalUrl,
-        episode: episode,
-      )).push(context);
+      await PlayerRoute(
+        $extra: PlayerRouteExtra(
+          item: detailedItem ?? baseItem,
+          videoUrl: finalUrl,
+          episode: episode,
+        ),
+      ).push<void>(context);
     }
   }
 
@@ -92,13 +96,15 @@ class PlaybackLauncher {
 
     bool isCanceled = false;
     bool dialogDismissed = false;
-    LoadingDialog.show(
-      context,
-      message: AppLocalizations.of(context)!.resolving,
-      onCancel: () {
-        isCanceled = true;
-        dialogDismissed = true;
-      },
+    unawaited(
+      LoadingDialog.show(
+        context,
+        message: AppLocalizations.of(context)!.resolving,
+        onCancel: () {
+          isCanceled = true;
+          dialogDismissed = true;
+        },
+      ),
     );
 
     try {
@@ -134,8 +140,11 @@ class PlaybackLauncher {
         _ref.read(notificationServiceProvider).showError(
               AppLocalizations.of(context)!.playerNotDetected(playerName),
             );
-        PlayerRoute($extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl))
-            .push<void>(context);
+        unawaited(
+          PlayerRoute(
+            $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
+          ).push<void>(context),
+        );
         return;
       }
 
@@ -164,8 +173,11 @@ class PlaybackLauncher {
       _ref.read(notificationServiceProvider).showError(
             AppLocalizations.of(context)!.usingInternalPlayerError(e.toString()),
           );
-      PlayerRoute($extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl))
-          .push<void>(context);
+      unawaited(
+        PlayerRoute(
+          $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
+        ).push<void>(context),
+      );
     }
   }
 
@@ -202,8 +214,11 @@ class PlaybackLauncher {
       _ref.read(notificationServiceProvider).showError(
             AppLocalizations.of(context)!.playerNotDetected(playerName),
           );
-      PlayerRoute($extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl))
-          .push<void>(context);
+      unawaited(
+        PlayerRoute(
+          $extra: PlayerRouteExtra(item: item, videoUrl: episodeDataUrl),
+        ).push<void>(context),
+      );
     }
   }
 

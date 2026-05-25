@@ -14,6 +14,38 @@ import '../../settings/presentation/player_settings_provider.dart';
 
 part 'subtitle_search_provider.g.dart';
 
+// Args + worker for the ZIP-extraction `compute()` call below. Kept at file
+// scope because compute() requires a top-level / static target.
+class _SubtitleZipArgs {
+  final Uint8List bytes;
+  final String tempDirPath;
+  _SubtitleZipArgs(this.bytes, this.tempDirPath);
+}
+
+Future<String?> _extractSubtitleFromZip(_SubtitleZipArgs args) async {
+  final archive = ZipDecoder().decodeBytes(args.bytes);
+  for (final file in archive) {
+    if (file.isFile &&
+        (file.name.endsWith('.srt') ||
+            file.name.endsWith('.vtt') ||
+            file.name.endsWith('.ass'))) {
+      final subFile = File(
+        p.join(
+          args.tempDirPath,
+          "sub_${DateTime.now().millisecondsSinceEpoch}_${file.name}",
+        ),
+      );
+      await subFile.writeAsBytes(file.content as List<int>);
+      return subFile.path;
+    }
+  }
+  return null;
+}
+
+List<int> _decompressGzip(Uint8List bytes) {
+  return const GZipDecoder().decodeBytes(bytes);
+}
+
 const Map<String, String> subtitleLanguages = {
   'English': 'en',
   'Hindi': 'hi',
@@ -120,7 +152,7 @@ class SubtitleSearch extends _$SubtitleSearch {
     int completedProviders = 0;
 
     for (final provider in _providers) {
-      provider.search(
+      unawaited(provider.search(
         query: query,
         imdbId: imdbId,
         tmdbId: tmdbId,
@@ -130,14 +162,14 @@ class SubtitleSearch extends _$SubtitleSearch {
         cancelToken: _cancelToken,
       ).then((results) {
         if (!ref.mounted || searchId != _activeSearchId) return;
-        
+
         if (results.isNotEmpty) {
           allResults.addAll(results);
           state = AsyncData(List.from(allResults));
         }
       }).catchError((Object e) {
         if (e is DioException && e.type == DioExceptionType.cancel) return;
-        if (kDebugMode) print("${provider.name} search failed: $e");
+        if (kDebugMode) debugPrint("${provider.name} search failed: $e");
       }).whenComplete(() {
         if (!ref.mounted || searchId != _activeSearchId) return;
         
@@ -146,7 +178,7 @@ class SubtitleSearch extends _$SubtitleSearch {
         if (completedProviders == _providers.length && allResults.isEmpty) {
           state = const AsyncData([]);
         }
-      });
+      }));
     }
   }
 
@@ -205,24 +237,28 @@ class SubtitleSearch extends _$SubtitleSearch {
 
       // Detect archive format by magic bytes
       if (bytes.length > 4 && bytes[0] == 0x50 && bytes[1] == 0x4B) {
-        // ZIP archive (most common for SubDL and SubSource)
-        if (kDebugMode) print("[SubtitleDownload] Detected ZIP archive, extracting...");
-        final archive = ZipDecoder().decodeBytes(bytes);
-        for (final file in archive) {
-          if (file.isFile && (file.name.endsWith('.srt') || file.name.endsWith('.vtt') || file.name.endsWith('.ass'))) {
-            final subFile = File(p.join(tempDir.path, "sub_${DateTime.now().millisecondsSinceEpoch}_${file.name}"));
-            await subFile.writeAsBytes(file.content as List<int>);
-            if (kDebugMode) print("[SubtitleDownload] ✅ Extracted: ${file.name}");
-            return subFile.path;
-          }
+        // ZIP archive (most common for SubDL and SubSource).
+        // Decode + extract on a worker isolate so the player UI doesn't
+        // freeze while the user is actively watching (audit B12).
+        if (kDebugMode) debugPrint("[SubtitleDownload] Detected ZIP archive, extracting...");
+        final extractedPath = await compute(
+          _extractSubtitleFromZip,
+          _SubtitleZipArgs(Uint8List.fromList(bytes), tempDir.path),
+        );
+        if (extractedPath != null) {
+          if (kDebugMode) debugPrint("[SubtitleDownload] ✅ Extracted: $extractedPath");
+          return extractedPath;
         }
         if (kDebugMode) {
-          print("[SubtitleDownload] ❌ ZIP contained no .srt/.vtt/.ass files. Entries: ${archive.map((f) => f.name).toList()}");
+          debugPrint("[SubtitleDownload] ❌ ZIP contained no .srt/.vtt/.ass files.");
         }
       } else if (bytes.length > 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
-        // GZIP compressed file
-        if (kDebugMode) print("[SubtitleDownload] Detected GZIP, decompressing...");
-        final decompressed = GZipDecoder().decodeBytes(bytes);
+        // GZIP compressed file — also offloaded to worker isolate.
+        if (kDebugMode) debugPrint("[SubtitleDownload] Detected GZIP, decompressing...");
+        final decompressed = await compute(
+          _decompressGzip,
+          Uint8List.fromList(bytes),
+        );
         final subFile = File("$savePath.srt");
         await subFile.writeAsBytes(decompressed);
         return subFile.path;

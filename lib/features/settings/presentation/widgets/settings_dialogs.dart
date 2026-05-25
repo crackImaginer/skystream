@@ -416,7 +416,7 @@ void showDefaultPlayerDialog(
               ListTile(
                 title: Text(l10n.internalPlayer),
                 subtitle: Text(l10n.builtInPlayer),
-                leading: Radio<String?>(value: null),
+                leading: const Radio<String?>(value: null),
                 trailing: const Icon(Icons.play_circle_filled_rounded),
                 onTap: () {
                   ref.read(playerSettingsProvider.notifier).setPreferredPlayer(null);
@@ -497,49 +497,65 @@ void showDohProviderDialog(BuildContext context, WidgetRef ref) {
                     ListTile(
                       title: Text(l10n.cloudflare),
                       subtitle: const Text('1.1.1.1'),
-                      leading: Radio<DohProvider>(value: DohProvider.cloudflare),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.cloudflare,
+                      ),
                       onTap: () => saveAndClose(DohProvider.cloudflare),
                     ),
                     ListTile(
                       title: Text(l10n.google),
                       subtitle: const Text('8.8.8.8'),
-                      leading: Radio<DohProvider>(value: DohProvider.google),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.google,
+                      ),
                       onTap: () => saveAndClose(DohProvider.google),
                     ),
                     ListTile(
                       title: Text(l10n.adguard),
                       subtitle: const Text('dns.adguard.com'),
-                      leading: Radio<DohProvider>(value: DohProvider.adguard),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.adguard,
+                      ),
                       onTap: () => saveAndClose(DohProvider.adguard),
                     ),
                     ListTile(
                       title: Text(l10n.dnsWatch),
                       subtitle: const Text('resolver2.dns.watch'),
-                      leading: Radio<DohProvider>(value: DohProvider.dnsWatch),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.dnsWatch,
+                      ),
                       onTap: () => saveAndClose(DohProvider.dnsWatch),
                     ),
                     ListTile(
                       title: Text(l10n.quad9),
                       subtitle: const Text('9.9.9.9'),
-                      leading: Radio<DohProvider>(value: DohProvider.quad9),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.quad9,
+                      ),
                       onTap: () => saveAndClose(DohProvider.quad9),
                     ),
                     ListTile(
                       title: Text(l10n.dnsSb),
                       subtitle: const Text('doh.dns.sb'),
-                      leading: Radio<DohProvider>(value: DohProvider.dnsSb),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.dnsSb,
+                      ),
                       onTap: () => saveAndClose(DohProvider.dnsSb),
                     ),
                     ListTile(
                       title: Text(l10n.canadianShield),
                       subtitle: const Text('private.canadianshield.cira.ca'),
-                      leading: Radio<DohProvider>(value: DohProvider.canadianShield),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.canadianShield,
+                      ),
                       onTap: () => saveAndClose(DohProvider.canadianShield),
                     ),
                     ListTile(
                       title: Text(l10n.custom),
                       subtitle: Text(l10n.enterCustomDohUrl),
-                      leading: Radio<DohProvider>(value: DohProvider.custom),
+                      leading: const Radio<DohProvider>(
+                        value: DohProvider.custom,
+                      ),
                       onTap: () => setState(() => currentProvider = DohProvider.custom),
                     ),
                     if (currentProvider == DohProvider.custom)
@@ -1286,7 +1302,7 @@ void showSubDlAuthDialog(
                         ),
                       ),
                     ),
-                    Expanded(child: Divider()),
+                    const Expanded(child: Divider()),
                   ],
                 ),
                 const SizedBox(height: 16),

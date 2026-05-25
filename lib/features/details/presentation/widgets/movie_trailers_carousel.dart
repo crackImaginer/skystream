@@ -151,6 +151,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
               CachedNetworkImage(
                 imageUrl: 'https://img.youtube.com/vi/$key/mqdefault.jpg',
                 fit: BoxFit.cover,
+                memCacheWidth: 480, // YouTube mqdefault is 320 wide; 1.5× DPR
                 errorWidget: (_, _, _) => const ThumbnailErrorPlaceholder(),
               ),
               Container(color: Colors.black26),
@@ -190,6 +191,7 @@ class _MovieTrailersCarouselState extends State<MovieTrailersCarousel> {
               CachedNetworkImage(
                 imageUrl: thumbUrl,
                 fit: BoxFit.cover,
+                memCacheWidth: 400, // Display 200, hi-DPR safe
                 errorWidget: (_, _, _) =>
                     ThumbnailErrorPlaceholder(label: video.name),
               ),

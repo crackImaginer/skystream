@@ -127,7 +127,7 @@ class _DeveloperOptionsScreenState
 
     await handleDevLoadAssetsChanged(newValue);
 
-    ref.read(extensionsControllerProvider.notifier).loadInstalledPlugins();
+    await ref.read(extensionsControllerProvider.notifier).loadInstalledPlugins();
   }
 
   Future<void> _pickLocalVideo(BuildContext context) async {
@@ -137,18 +137,20 @@ class _DeveloperOptionsScreenState
       final path = result.files.single.path!;
       final name = result.files.single.name;
 
-      PlayerRoute(
-        $extra: PlayerRouteExtra(
-          item: MultimediaItem(
-            title: name,
-            url: path,
-            posterUrl: '',
-            provider: AppLocalizations.of(context)!.local,
-            episodes: [Episode(name: name, url: path, posterUrl: '')],
+      unawaited(
+        PlayerRoute(
+          $extra: PlayerRouteExtra(
+            item: MultimediaItem(
+              title: name,
+              url: path,
+              posterUrl: '',
+              provider: AppLocalizations.of(context)!.local,
+              episodes: [Episode(name: name, url: path, posterUrl: '')],
+            ),
+            videoUrl: path,
           ),
-          videoUrl: path,
-        ),
-      ).push<void>(context);
+        ).push<void>(context),
+      );
     }
   }
 
@@ -226,18 +228,20 @@ class _DeveloperOptionsScreenState
       final path = result.files.single.path!;
       final name = result.files.single.name;
 
-      PlayerRoute(
-        $extra: PlayerRouteExtra(
-          item: MultimediaItem(
-            title: name,
-            url: path,
-            posterUrl: '',
-            provider: AppLocalizations.of(context)!.torrent,
-            episodes: [Episode(name: name, url: path, posterUrl: '')],
+      unawaited(
+        PlayerRoute(
+          $extra: PlayerRouteExtra(
+            item: MultimediaItem(
+              title: name,
+              url: path,
+              posterUrl: '',
+              provider: AppLocalizations.of(context)!.torrent,
+              episodes: [Episode(name: name, url: path, posterUrl: '')],
+            ),
+            videoUrl: path,
           ),
-          videoUrl: path,
-        ),
-      ).push<void>(context);
+        ).push<void>(context),
+      );
     }
   }
 }

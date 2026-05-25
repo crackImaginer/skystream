@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -125,12 +126,12 @@ class LocalProxyService {
       }
 
       request.response.statusCode = HttpStatus.notFound;
-      request.response.close();
+      unawaited(request.response.close());
     } catch (e) {
       if (kDebugMode) debugPrint("LocalProxyService: Server Error: $e");
       try {
         request.response.statusCode = HttpStatus.internalServerError;
-        request.response.close();
+        unawaited(request.response.close());
       } catch (e) {
         if (kDebugMode) {
           debugPrint(
@@ -155,14 +156,14 @@ class LocalProxyService {
     } else {
       request.response.statusCode = HttpStatus.notFound;
     }
-    request.response.close();
+    unawaited(request.response.close());
   }
 
   Future<void> _handleProxyRequest(HttpRequest request) async {
     final targetUrl = request.uri.queryParameters['url'];
     if (targetUrl == null) {
       request.response.statusCode = HttpStatus.badRequest;
-      request.response.close();
+      unawaited(request.response.close());
       return;
     }
 
@@ -173,7 +174,8 @@ class LocalProxyService {
     if (hBase64 != null) {
       try {
         final decoded = utf8.decode(base64Url.decode(hBase64));
-        final Map<String, dynamic> map = jsonDecode(decoded);
+        final Map<String, dynamic> map =
+            jsonDecode(decoded) as Map<String, dynamic>;
         map.forEach((key, value) => stickyHeaders[key] = value.toString());
       } catch (e) {
         if (kDebugMode) {
@@ -187,7 +189,9 @@ class LocalProxyService {
     if (oBase64 != null) {
       try {
         final decoded = utf8.decode(base64Url.decode(oBase64));
-        options = ProxyOptions.fromJson(jsonDecode(decoded));
+        options = ProxyOptions.fromJson(
+          jsonDecode(decoded) as Map<String, dynamic>,
+        );
       } catch (e) {
         if (kDebugMode) debugPrint("[PROXY] Failed to parse options: $e");
       }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
@@ -1560,9 +1562,13 @@ class PlayerBottomSheets {
                                     .downloadAndPrepare(sub);
 
                                 if (path != null) {
-                                  ref
-                                      .read(playerControllerProvider.notifier)
-                                      .loadExternalSubtitleFile(filePath: path);
+                                  unawaited(
+                                    ref
+                                        .read(playerControllerProvider.notifier)
+                                        .loadExternalSubtitleFile(
+                                          filePath: path,
+                                        ),
+                                  );
                                   if (context.mounted) Navigator.pop(ctx);
                                 } else {
                                   if (context.mounted) {

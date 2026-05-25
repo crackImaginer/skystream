@@ -41,7 +41,9 @@ class BookmarksTab extends ConsumerWidget {
                   '',
               title: item.title,
               heroTag: 'lib_bookmark_${item.url}_$index',
-              onTap: () => DetailsRoute($extra: DetailsRouteExtra(item: item)).push(context),
+              onTap: () => DetailsRoute(
+                $extra: DetailsRouteExtra(item: item),
+              ).push<void>(context),
             );
           },
         ),

@@ -205,7 +205,9 @@ class ExtensionsController extends _$ExtensionsController {
 
   ExtensionPlugin? _parseJsonManifest(String content, String jsFilePath) {
     try {
-      final json = Map<String, dynamic>.from(jsonDecode(content));
+      final json = Map<String, dynamic>.from(
+        jsonDecode(content) as Map,
+      );
 
       // Dart 3 Pattern Matching for manifest extraction
       final (packageName, id) = (json['packageName'] as String?, json['id'] as String?);

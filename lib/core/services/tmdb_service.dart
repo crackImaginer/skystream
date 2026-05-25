@@ -21,7 +21,7 @@ class TmdbService {
     );
     if (response.statusCode == 200 && response.data != null) {
       return (response.data!['genres'] as List)
-          .map((i) => TmdbGenre.fromJson(i))
+          .map((dynamic i) => TmdbGenre.fromJson(i as Map<String, dynamic>))
           .toList();
     }
     return [];
@@ -34,7 +34,7 @@ class TmdbService {
     );
     if (response.statusCode == 200 && response.data != null) {
       return (response.data!['genres'] as List)
-          .map((i) => TmdbGenre.fromJson(i))
+          .map((dynamic i) => TmdbGenre.fromJson(i as Map<String, dynamic>))
           .toList();
     }
     return [];
@@ -347,7 +347,7 @@ class TmdbService {
 
     if (response.statusCode == 200 && response.data != null) {
       final rawResults = List<Map<String, dynamic>>.from(
-        response.data!['results'],
+        response.data!['results'] as List,
       );
 
       final List<Map<String, dynamic>> processedResults = [];
@@ -359,7 +359,9 @@ class TmdbService {
         if (mediaType == 'person') {
           // Hero Search: Extract movies from person's known_for
           if (item['known_for'] != null) {
-            final knownFor = List<Map<String, dynamic>>.from(item['known_for']);
+            final knownFor = List<Map<String, dynamic>>.from(
+              item['known_for'] as List,
+            );
             for (final known in knownFor) {
               // known_for items often miss media_type, infer if possible or default to movie
               known['media_type'] ??= 'movie';
@@ -379,9 +381,9 @@ class TmdbService {
         // --- Filter 1: Release Status (Existing logic) ---
         String? dateStr;
         if (mediaType == 'movie') {
-          dateStr = item['release_date'];
+          dateStr = item['release_date'] as String?;
         } else if (mediaType == 'tv') {
-          dateStr = item['first_air_date'];
+          dateStr = item['first_air_date'] as String?;
         }
         if (dateStr == null || dateStr.isEmpty) return false;
 
@@ -461,7 +463,7 @@ class TmdbService {
       if (response.statusCode != 200 || response.data == null) return [];
 
       final results = List<Map<String, dynamic>>.from(
-        response.data!['results'] ?? const [],
+        (response.data!['results'] as List?) ?? const <dynamic>[],
       );
 
       final seen = <String>{};
@@ -573,7 +575,9 @@ class TmdbService {
 
     final data = response.data;
     if (response.statusCode == 200 && data != null) {
-      final logos = List<Map<String, dynamic>>.from(data['logos'] ?? []);
+      final logos = List<Map<String, dynamic>>.from(
+        (data['logos'] as List?) ?? const <dynamic>[],
+      );
       return pickBestLogo(logos, language);
     }
     return null;
@@ -645,7 +649,9 @@ class TmdbService {
 
     // --- Priority 4: Any Wide PNG ---
     if (bestLogo.isEmpty) {
-      bestLogo = findLogo((l) => (l['aspect_ratio'] ?? 0) > 1);
+      bestLogo = findLogo(
+        (l) => (((l['aspect_ratio'] as num?) ?? 0) > 1),
+      );
     }
 
     // --- Fallback ---

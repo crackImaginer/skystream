@@ -74,11 +74,17 @@ class JsBytecodeCompiler {
   }
 
   /// True if [qbcPath] is missing or older than [scriptPath].
-  static bool isStale(String scriptPath, String qbcPath) {
+  ///
+  /// Async to avoid blocking the UI isolate on filesystem stat calls during
+  /// plugin warm-up — Android scoped storage can be slow on cold cache
+  /// (audit H26).
+  static Future<bool> isStale(String scriptPath, String qbcPath) async {
     final qbc = File(qbcPath);
-    if (!qbc.existsSync()) return true;
+    if (!await qbc.exists()) return true;
     final script = File(scriptPath);
-    if (!script.existsSync()) return false;
-    return script.lastModifiedSync().isAfter(qbc.lastModifiedSync());
+    if (!await script.exists()) return false;
+    final scriptMtime = await script.lastModified();
+    final qbcMtime = await qbc.lastModified();
+    return scriptMtime.isAfter(qbcMtime);
   }
 }

@@ -118,18 +118,18 @@ class StorageService {
     final items = <MultimediaItem>[];
     for (var i = 0; i < _libraryBox.length; i++) {
       final key = _libraryBox.keyAt(i);
-      final map = Map<String, dynamic>.from(_libraryBox.get(key));
+      final map = Map<String, dynamic>.from(_libraryBox.get(key) as Map);
       items.add(
         MultimediaItem(
-          title: map['title'] ?? '',
-          url: map['url'] ?? '',
-          posterUrl: map['posterUrl'] ?? '',
-          bannerUrl: map['bannerUrl'],
-          description: map['description'],
+          title: (map['title'] as String?) ?? '',
+          url: (map['url'] as String?) ?? '',
+          posterUrl: (map['posterUrl'] as String?) ?? '',
+          bannerUrl: map['bannerUrl'] as String?,
+          description: map['description'] as String?,
           contentType: MultimediaItem.parseContentType(
-            map['type'] ?? map['contentType'],
+            (map['type'] as String?) ?? (map['contentType'] as String?),
           ),
-          provider: map['provider'],
+          provider: map['provider'] as String?,
         ),
       );
     }
@@ -143,7 +143,7 @@ class StorageService {
   }
 
   String getThemeMode() {
-    return _settingsBox.get('theme_mode', defaultValue: 'system');
+    return _settingsBox.get('theme_mode', defaultValue: 'system') as String;
   }
 
   Future<void> setDefaultHomeScreen(String path) async {
@@ -151,7 +151,8 @@ class StorageService {
   }
 
   String getDefaultHomeScreen() {
-    return _settingsBox.get('default_home_screen', defaultValue: '/home');
+    return _settingsBox.get('default_home_screen', defaultValue: '/home')
+        as String;
   }
 
   Future<void> setDevLoadAssets(bool enabled) async {
@@ -159,7 +160,7 @@ class StorageService {
   }
 
   bool getDevLoadAssets() {
-    return _settingsBox.get('dev_load_assets', defaultValue: false);
+    return _settingsBox.get('dev_load_assets', defaultValue: false) as bool;
   }
 
   // --- Active Provider ---
@@ -227,7 +228,8 @@ class StorageService {
   }
 
   String getExploreLanguage() {
-    return _settingsBox.get('explore_language', defaultValue: 'en-US');
+    return _settingsBox.get('explore_language', defaultValue: 'en-US')
+        as String;
   }
 
   // --- Watch History Toggle ---
@@ -236,7 +238,8 @@ class StorageService {
   }
 
   bool isWatchHistoryEnabled() {
-    return _settingsBox.get('watch_history_enabled', defaultValue: true) ??
+    return (_settingsBox.get('watch_history_enabled', defaultValue: true)
+            as bool?) ??
         true;
   }
 
@@ -340,7 +343,7 @@ class StorageService {
       // Filter out episode-specific entries from the main history list
       if (key.startsWith("EP_")) continue;
 
-      final map = Map<String, dynamic>.from(_historyBox.get(key));
+      final map = Map<String, dynamic>.from(_historyBox.get(key) as Map);
       items.add(map);
     }
     // Sort by timestamp descending (newest first)
@@ -357,15 +360,15 @@ class StorageService {
     // Check main entry first (movies use this)
     final key = _getKey(url);
     if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key);
-      return map['position'] ?? 0;
+      final map = _historyBox.get(key) as Map;
+      return (map['position'] as int?) ?? 0;
     }
 
     // Fallback to episode if applicable (for legacy or mixed lookups)
     final epKey = "EP_${_getKey(url)}";
     if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey);
-      return map['position'] ?? 0;
+      final map = _historyBox.get(epKey) as Map;
+      return (map['position'] as int?) ?? 0;
     }
     return 0;
   }
@@ -378,17 +381,17 @@ class StorageService {
   }) {
     final epKey = "EP_${_getKey(epUrl)}";
     if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey);
-      return map['position'] ?? 0;
+      final map = _historyBox.get(epKey) as Map;
+      return (map['position'] as int?) ?? 0;
     }
 
     // Fallback: If we have season/episode info, look into the main item entry
     if (mainUrl != null && season != null && episode != null) {
       final mainKey = _getKey(mainUrl);
       if (_historyBox.containsKey(mainKey)) {
-        final map = _historyBox.get(mainKey);
+        final map = _historyBox.get(mainKey) as Map;
         if (map['season'] == season && map['episode'] == episode) {
-          return map['position'] ?? 0;
+          return (map['position'] as int?) ?? 0;
         }
       }
     }
@@ -398,14 +401,14 @@ class StorageService {
   int getDuration(String url) {
     final key = _getKey(url);
     if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key);
-      return map['duration'] ?? 0;
+      final map = _historyBox.get(key) as Map;
+      return (map['duration'] as int?) ?? 0;
     }
 
     final epKey = "EP_${_getKey(url)}";
     if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey);
-      return map['duration'] ?? 0;
+      final map = _historyBox.get(epKey) as Map;
+      return (map['duration'] as int?) ?? 0;
     }
     return 0;
   }
@@ -418,17 +421,17 @@ class StorageService {
   }) {
     final epKey = "EP_${_getKey(epUrl)}";
     if (_historyBox.containsKey(epKey)) {
-      final map = _historyBox.get(epKey);
-      return map['duration'] ?? 0;
+      final map = _historyBox.get(epKey) as Map;
+      return (map['duration'] as int?) ?? 0;
     }
 
     // Fallback: Look into main item entry
     if (mainUrl != null && season != null && episode != null) {
       final mainKey = _getKey(mainUrl);
       if (_historyBox.containsKey(mainKey)) {
-        final map = _historyBox.get(mainKey);
+        final map = _historyBox.get(mainKey) as Map;
         if (map['season'] == season && map['episode'] == episode) {
-          return map['duration'] ?? 0;
+          return (map['duration'] as int?) ?? 0;
         }
       }
     }
@@ -438,7 +441,7 @@ class StorageService {
   String? getLastStreamUrl(String url) {
     final key = _getKey(url);
     if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key);
+      final map = _historyBox.get(key) as Map;
       return map['lastStreamUrl'] as String?;
     }
     return null;
@@ -447,7 +450,7 @@ class StorageService {
   String? getLastEpisodeUrl(String url) {
     final key = _getKey(url);
     if (_historyBox.containsKey(key)) {
-      final map = _historyBox.get(key);
+      final map = _historyBox.get(key) as Map;
       return map['lastEpisodeUrl'] as String?;
     }
     return null;
@@ -514,7 +517,7 @@ class StorageService {
     final box = await Hive.openBox<dynamic>(kDownloadMetadataBox);
     final data = box.get(taskId);
     if (data == null) return null;
-    return Map<String, dynamic>.from(data);
+    return Map<String, dynamic>.from(data as Map);
   }
 
   Future<void> removeDownloadMetadata(String taskId) async {

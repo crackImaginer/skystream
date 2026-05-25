@@ -1,5 +1,7 @@
 import 'package:html_unescape/html_unescape.dart';
 
+import '../../config/tmdb_config.dart';
+
 enum MultimediaContentType { movie, series, anime, livestream, other }
 
 enum ShowStatus { completed, ongoing, upcoming }
@@ -232,19 +234,27 @@ class MultimediaItem {
 
   factory MultimediaItem.fromTmdbJson(Map<String, dynamic> json) {
     final String mTypeStr =
-        json['media_type'] ?? (json['title'] != null ? 'movie' : 'tv');
-    final title = _unescape.convert(json['title'] ?? json['name'] ?? 'Unknown');
-    final date = json['release_date'] ?? json['first_air_date'] ?? '';
+        (json['media_type'] as String?) ??
+        (json['title'] != null ? 'movie' : 'tv');
+    final title = _unescape.convert(
+      (json['title'] as String?) ??
+          (json['name'] as String?) ??
+          'Unknown',
+    );
+    final date =
+        (json['release_date'] as String?) ??
+        (json['first_air_date'] as String?) ??
+        '';
     final year = int.tryParse(date.split('-').first);
-    final posterPath = json['poster_path'];
-    final backdropPath = json['backdrop_path'];
+    final posterPath = json['poster_path'] as String?;
+    final backdropPath = json['backdrop_path'] as String?;
 
     // Using simple logic for now, we'll eventually use AppImageFallbacks once we unify more
     final posterUrl = posterPath != null
-        ? 'https://image.tmdb.org/t/p/w500$posterPath'
+        ? '${TmdbConfig.posterSizeUrl}$posterPath'
         : '';
     final bannerUrl = backdropPath != null
-        ? 'https://image.tmdb.org/t/p/w1280$backdropPath'
+        ? '${TmdbConfig.backdropSizeUrl}$backdropPath'
         : posterUrl;
 
     return MultimediaItem(
@@ -590,9 +600,9 @@ class SubtitleFile {
 
   factory SubtitleFile.fromJson(Map<String, dynamic> json) {
     return SubtitleFile(
-      url: json['url'] ?? '',
-      label: json['label'] ?? 'Unknown',
-      lang: json['lang'],
+      url: (json['url'] as String?) ?? '',
+      label: (json['label'] as String?) ?? 'Unknown',
+      lang: json['lang'] as String?,
     );
   }
 }

@@ -158,8 +158,9 @@ class _ProviderSearchSectionState extends ConsumerState<ProviderSearchSection> {
                                 )
                               : item.contentType,
                         );
-                        DetailsRoute($extra: DetailsRouteExtra(item: enrichedItem))
-                            .push(context);
+                        DetailsRoute(
+                          $extra: DetailsRouteExtra(item: enrichedItem),
+                        ).push<void>(context);
                       },
                       child: SizedBox(
                         width: 220,

@@ -85,8 +85,9 @@ class JsEngineService {
         storage: FileStorage('${dir.path}/.cf_cookies/'),
       );
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('[CookieJar] Persist init failed, using RAM: $e');
+      }
       _cookieJar = PersistCookieJar();
     }
     _cookieJarReady = true;

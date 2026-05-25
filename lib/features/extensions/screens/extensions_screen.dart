@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/extensions/models/extension_plugin.dart';
 import '../../../core/extensions/models/extension_repository.dart';
-import '../../../core/providers/device_info_provider.dart';
 import '../../../shared/widgets/custom_widgets.dart';
 import '../providers/extensions_controller.dart';
 import '../widgets/plugin_settings_dialog.dart';
@@ -530,7 +529,6 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
   void _showAddRepoDialog(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final controller = TextEditingController();
-    final isTv = ref.read(deviceProfileProvider).asData?.value.isTv ?? false;
 
     showDialog<void>(
       context: context,

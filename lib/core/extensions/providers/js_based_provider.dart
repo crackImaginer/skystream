@@ -182,7 +182,7 @@ class JsBasedProvider extends SkyStreamProvider {
 
     try {
       // Fast path: load pre-compiled bytecode when available and fresh.
-      if (qbc != null && !JsBytecodeCompiler.isStale(_scriptPath, qbc)) {
+      if (qbc != null && !await JsBytecodeCompiler.isStale(_scriptPath, qbc)) {
         final bytes = await File(qbc).readAsBytes();
         await _jsEngine.loadBytes(bytes, tag: _packageName);
         if (kDebugMode) talker.debug("JsBasedProvider: Loaded bytecode for $_packageName");
@@ -214,7 +214,7 @@ class JsBasedProvider extends SkyStreamProvider {
   Future<bool> precompile() async {
     final qbc = _qbcPath;
     if (qbc == null) return false;
-    if (!JsBytecodeCompiler.isStale(_scriptPath, qbc)) return false;
+    if (!await JsBytecodeCompiler.isStale(_scriptPath, qbc)) return false;
     String? rawScript;
     try {
       if (_scriptLoader != null) {

@@ -27,6 +27,10 @@ class MultimediaCard extends StatelessWidget {
     final cardWidth = isDesktop
         ? (isPortrait ? 200.0 : 300.0)
         : (isPortrait ? 130.0 : 200.0);
+    // Decode at ~1.5× displayed width to look crisp on hi-DPR screens without
+    // wasting memory. The full-res w500/w780 source would otherwise be decoded
+    // 1:1 into the GPU even when displayed at 130 px.
+    final memCacheWidth = (cardWidth * 1.5).round();
 
     return RepaintBoundary(
       child: CardsWrapper(
@@ -45,6 +49,7 @@ class MultimediaCard extends StatelessWidget {
                       imageUrl: imageUrl ?? '',
                       fit: BoxFit.cover,
                       width: double.infinity,
+                      memCacheWidth: memCacheWidth,
                       placeholder: (context, url) =>
                           ShimmerPlaceholder(borderRadius: 12),
                       errorWidget: (_, _, _) =>

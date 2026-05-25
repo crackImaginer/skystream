@@ -1,4 +1,5 @@
 import 'package:html_unescape/html_unescape.dart';
+import '../config/tmdb_config.dart';
 import '../domain/entity/multimedia_item.dart';
 import '../utils/image_fallbacks.dart';
 
@@ -52,10 +53,10 @@ class TmdbDetails extends MultimediaItem {
   }) : super(
          url: '', // Resolved via provider
          posterUrl: posterPath != null
-             ? 'https://image.tmdb.org/t/p/w500$posterPath'
+             ? '${TmdbConfig.posterSizeUrl}$posterPath'
              : '',
          bannerUrl: backdropPath != null
-             ? 'https://image.tmdb.org/t/p/original$backdropPath'
+             ? '${TmdbConfig.backdropSizeUrl}$backdropPath'
              : null,
          description: overview,
          contentType: MultimediaItem.parseContentType(mediaType),
@@ -67,7 +68,8 @@ class TmdbDetails extends MultimediaItem {
   factory TmdbDetails.fromJson(Map<String, dynamic> json, String languageCode) {
     // Determine media type
     final String mType =
-        json['media_type'] ?? (json['title'] != null ? 'movie' : 'tv');
+        (json['media_type'] as String?) ??
+        (json['title'] != null ? 'movie' : 'tv');
     final isMovie = mType == 'movie';
 
     var title = json['title'] != null || json['name'] != null
@@ -80,25 +82,31 @@ class TmdbDetails extends MultimediaItem {
     // Use English translation if available to avoid empty fields
     if (json['translations'] != null) {
       final translations = List<Map<String, dynamic>>.from(
-        json['translations']['translations'] ?? [],
+        ((json['translations'] as Map<String, dynamic>)['translations']
+                as List?) ??
+            const <dynamic>[],
       );
       final enTrans = translations.firstWhere(
         (t) => t['iso_639_1'] == 'en',
         orElse: () => <String, dynamic>{},
       );
       if (enTrans.isNotEmpty && enTrans['data'] != null) {
-        final enTitle = enTrans['data']['title'] ?? enTrans['data']['name'];
-        if (enTitle != null && enTitle.toString().isNotEmpty) {
-          title = _unescape.convert(enTitle as String);
+        final enData = enTrans['data'] as Map<String, dynamic>;
+        final enTitle = (enData['title'] ?? enData['name']) as String?;
+        if (enTitle != null && enTitle.isNotEmpty) {
+          title = _unescape.convert(enTitle);
         }
-        final enOverview = enTrans['data']['overview'];
-        if (enOverview != null && enOverview.toString().isNotEmpty) {
-          overview = _unescape.convert(enOverview as String);
+        final enOverview = enData['overview'] as String?;
+        if (enOverview != null && enOverview.isNotEmpty) {
+          overview = _unescape.convert(enOverview);
         }
       }
     }
 
-    final date = json['release_date'] ?? json['first_air_date'] ?? '';
+    final date =
+        (json['release_date'] as String?) ??
+        (json['first_air_date'] as String?) ??
+        '';
     final voteAvg = (json['vote_average'] as num?)?.toDouble() ?? 0.0;
 
     final runtime = isMovie
@@ -111,56 +119,75 @@ class TmdbDetails extends MultimediaItem {
     String certification = isMovie ? "PG-13" : "TV-14";
     if (isMovie) {
       final releaseDates = json['release_dates'] != null
-          ? json['release_dates']['results'] as List
-          : <dynamic>[];
+          ? ((json['release_dates'] as Map<String, dynamic>)['results']
+                    as List?) ??
+                const <dynamic>[]
+          : const <dynamic>[];
       if (releaseDates.isNotEmpty) {
         final usRelease = releaseDates.firstWhere(
-          (r) => r['iso_3166_1'] == 'US',
+          (dynamic r) => (r as Map)['iso_3166_1'] == 'US',
           orElse: () => null,
         );
         if (usRelease != null) {
-          final certs = usRelease['release_dates'] as List;
-          if (certs.isNotEmpty && certs.first['certification'] != '') {
-            certification = certs.first['certification'];
+          final certs =
+              (usRelease as Map<String, dynamic>)['release_dates'] as List;
+          if (certs.isNotEmpty &&
+              (certs.first as Map)['certification'] != '') {
+            certification =
+                (certs.first as Map<String, dynamic>)['certification']
+                    as String;
           }
         }
       }
     } else {
       final contentRatings = json['content_ratings'] != null
-          ? json['content_ratings']['results'] as List
-          : <dynamic>[];
+          ? ((json['content_ratings'] as Map<String, dynamic>)['results']
+                    as List?) ??
+                const <dynamic>[]
+          : const <dynamic>[];
       if (contentRatings.isNotEmpty) {
         final usRating = contentRatings.firstWhere(
-          (r) => r['iso_3166_1'] == 'US',
+          (dynamic r) => (r as Map)['iso_3166_1'] == 'US',
           orElse: () => null,
         );
-        if (usRating != null) certification = usRating['rating'];
+        if (usRating != null) {
+          certification =
+              (usRating as Map<String, dynamic>)['rating'] as String;
+        }
       }
     }
 
-    final genresList = List<Map<String, dynamic>>.from(json['genres'] ?? []);
+    final genresList = List<Map<String, dynamic>>.from(
+      (json['genres'] as List?) ?? const <dynamic>[],
+    );
     final genres = genresList.map((g) => g['name'].toString()).toList();
     final genresStr = genres.join(' | ');
 
     final seasons = !isMovie
         ? List<Map<String, dynamic>>.from(
-            json['seasons'] ?? [],
-          ).map((s) => TmdbSeason.fromJson(s)).toList()
+            (json['seasons'] as List?) ?? const <dynamic>[],
+          ).map(TmdbSeason.fromJson).toList()
         : <TmdbSeason>[];
 
-    final credits = json['credits'] ?? <String, dynamic>{};
-        final castList = List<Map<String, dynamic>>.from(credits['cast'] ?? <dynamic>[]);
-    final cast = castList.map((c) => TmdbCast.fromJson(c)).toList();
+    final credits =
+        (json['credits'] as Map<String, dynamic>?) ??
+        const <String, dynamic>{};
+    final castList = List<Map<String, dynamic>>.from(
+      (credits['cast'] as List?) ?? const <dynamic>[],
+    );
+    final cast = castList.map(TmdbCast.fromJson).toList();
 
     // Find Director / Creator
     String director = "Unknown";
-    final crew = List<Map<String, dynamic>>.from(credits['crew'] ?? []);
+    final crew = List<Map<String, dynamic>>.from(
+      (credits['crew'] as List?) ?? const <dynamic>[],
+    );
     if (isMovie) {
       final dir = crew.firstWhere(
         (m) => m['job'] == 'Director',
         orElse: () => <String, dynamic>{'name': 'Unknown'},
       );
-      director = dir['name'];
+      director = dir['name'] as String;
     } else {
       final creators = json['created_by'] as List?;
       if (creators != null && creators.isNotEmpty) {
@@ -169,7 +196,10 @@ class TmdbDetails extends MultimediaItem {
     }
 
     final videos = List<Map<String, dynamic>>.from(
-      json['videos'] != null ? json['videos']['results'] : [],
+      json['videos'] != null
+          ? ((json['videos'] as Map<String, dynamic>)['results'] as List?) ??
+                const <dynamic>[]
+          : const <dynamic>[],
     );
     final tmdbTrailers = videos
         .where(
@@ -181,10 +211,10 @@ class TmdbDetails extends MultimediaItem {
         .toList();
 
     final productionCompaniesList = List<Map<String, dynamic>>.from(
-      json['production_companies'] ?? [],
+      (json['production_companies'] as List?) ?? const <dynamic>[],
     );
     final productionCompanies = productionCompaniesList
-        .map((p) => TmdbProductionCompany.fromJson(p))
+        .map(TmdbProductionCompany.fromJson)
         .toList();
 
     final tmdbStatus = (json['status'] as String?) ?? 'Unknown';
@@ -199,12 +229,13 @@ class TmdbDetails extends MultimediaItem {
       id: json['id'] as int? ?? 0,
       mediaType: mType,
       title: title,
-      posterPath: json['poster_path'],
-      backdropPath: json['backdrop_path'],
+      posterPath: json['poster_path'] as String?,
+      backdropPath: json['backdrop_path'] as String?,
       releaseDate: date,
       voteAverage: voteAvg,
       overview: overview,
-      logoUrl: json['logo_url'] as String?, // Might be populated before/after this
+      logoUrl:
+          json['logo_url'] as String?, // Might be populated before/after this
       genresStr: genresStr,
       runtime: (runtime as num).toInt(),
       certification: certification,

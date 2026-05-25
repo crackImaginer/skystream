@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/providers/device_info_provider.dart';
 import '../../../core/models/tmdb_details.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/storage/history_repository.dart';
@@ -110,7 +109,6 @@ class _TmdbMovieDetailsScreenState
     final params = MovieDetailsParams(widget.movieId, widget.mediaType);
     final detailsAsync = ref.watch(tmdbDetailsProvider(params));
     final fastDetailsAsync = ref.watch(lightweightDetailsProvider(params));
-    final deviceProfileAsync = ref.watch(deviceProfileProvider);
 
     // Prioritize full data, but use fast data if full is still loading
     final data = detailsAsync.asData?.value ?? fastDetailsAsync.asData?.value;

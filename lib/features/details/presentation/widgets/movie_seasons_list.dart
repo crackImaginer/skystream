@@ -276,7 +276,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
               return const SizedBox.shrink();
             }
             final episodes = List<Map<String, dynamic>>.from(
-              snapshot.data!['episodes'] ?? [],
+              (snapshot.data!['episodes'] as List?) ?? const <dynamic>[],
             );
             if (episodes.isEmpty) return const SizedBox.shrink();
 
@@ -293,8 +293,8 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                   itemBuilder: (context, index) {
                     final ep = episodes[index];
                     final imageUrl = AppImageFallbacks.tmdbStill(
-                      ep['still_path'],
-                      label: ep['name'] ?? 'Episode',
+                      ep['still_path'] as String?,
+                      label: (ep['name'] as String?) ?? 'Episode',
                     );
                     final voteAverage =
                         (ep['vote_average'] as num?)?.toDouble() ?? 0.0;
@@ -330,13 +330,16 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                 imageUrl: imageUrl ?? '',
                                 fit: BoxFit.cover,
                                 width: double.infinity,
+                                // Card is 300 wide; decode at ~450 for hi-DPR.
+                                memCacheWidth: 450,
                                 placeholder: (context, url) =>
                                     ShimmerPlaceholder.rectangular(
                                       borderRadius: 8,
                                     ),
                                 errorWidget: (_, _, _) =>
                                     ThumbnailErrorPlaceholder(
-                                      label: ep['name'] ?? 'Episode',
+                                      label:
+                                          (ep['name'] as String?) ?? 'Episode',
                                     ),
                               ),
                             ),
@@ -388,7 +391,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    ep['overview'] ?? '',
+                                    (ep['overview'] as String?) ?? '',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -438,7 +441,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
               return const SizedBox.shrink();
             }
             final episodes = List<Map<String, dynamic>>.from(
-              snapshot.data!['episodes'] ?? [],
+              (snapshot.data!['episodes'] as List?) ?? const <dynamic>[],
             );
             if (episodes.isEmpty) return const SizedBox.shrink();
 
@@ -517,8 +520,8 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                   itemBuilder: (context, index) {
                     final ep = displayedEpisodes[index];
                     final imageUrl = AppImageFallbacks.tmdbStill(
-                      ep['still_path'],
-                      label: ep['name'] ?? 'Episode',
+                      ep['still_path'] as String?,
+                      label: (ep['name'] as String?) ?? 'Episode',
                     );
                     final voteAverage =
                         (ep['vote_average'] as num?)?.toDouble() ?? 0.0;
@@ -546,10 +549,12 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                 imageUrl: imageUrl ?? '',
                                 width: 120,
                                 height: 68,
+                                memCacheWidth: 240, // 2× for hi-DPR
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) =>
                                     ThumbnailErrorPlaceholder(
-                                      label: ep['name'] ?? 'Episode',
+                                      label:
+                                          (ep['name'] as String?) ?? 'Episode',
                                       iconSize: 24,
                                     ),
                               ),
@@ -601,7 +606,7 @@ class _MovieSeasonsListState extends ConsumerState<MovieSeasonsList> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    ep['overview'] ?? '',
+                                    (ep['overview'] as String?) ?? '',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(

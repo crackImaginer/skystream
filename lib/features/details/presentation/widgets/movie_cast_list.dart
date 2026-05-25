@@ -111,6 +111,7 @@ class _MovieCastListState extends State<MovieCastList> {
               imageUrl: actor.profileImageUrl ?? '',
               width: 80,
               height: 80,
+              memCacheWidth: 160, // 2× for crisp on hi-DPR
               fit: BoxFit.cover,
               errorWidget: (_, _, _) =>
                   ThumbnailErrorPlaceholder(label: actor.name, iconSize: 30),
@@ -158,6 +159,7 @@ class _MovieCastListState extends State<MovieCastList> {
                 imageUrl: member.profileImageUrl ?? '',
                 width: 70,
                 height: 70,
+                memCacheWidth: 140,
                 fit: BoxFit.cover,
                 errorWidget: (_, _, _) =>
                     ThumbnailErrorPlaceholder(label: member.name, iconSize: 30),

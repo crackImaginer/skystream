@@ -67,12 +67,14 @@ class DownloadsNotifier extends _$DownloadsNotifier {
           status: record.status,
           progress: record.progress,
           item: MultimediaItem.fromJson(
-            Map<String, dynamic>.from(metadata['item']),
+            Map<String, dynamic>.from(metadata['item'] as Map),
           ),
           episode: metadata['episode'] != null
-              ? Episode.fromJson(Map<String, dynamic>.from(metadata['episode']))
+              ? Episode.fromJson(
+                  Map<String, dynamic>.from(metadata['episode'] as Map),
+                )
               : null,
-          timestamp: metadata['timestamp'] ?? 0,
+          timestamp: (metadata['timestamp'] as int?) ?? 0,
         ),
       );
     }

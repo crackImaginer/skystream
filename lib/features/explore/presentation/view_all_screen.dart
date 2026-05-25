@@ -5,10 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/responsive_breakpoints.dart';
 
-import '../../../../core/providers/device_info_provider.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
-import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/utils/image_utils.dart';
 import 'controllers/view_all_controller.dart';
@@ -68,11 +66,11 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     });
   }
 
-  void _checkAspectRatio() async {
+  Future<void> _checkAspectRatio() async {
     if (widget.initialMediaList.isEmpty) return;
     final url = widget.initialMediaList.first.posterImageUrl;
-    if (url == null || url.isEmpty) return;
-    
+    if (url.isEmpty) return;
+
     final isPortrait = await ImageUtils.isImagePortrait(url);
     if (mounted && _isPortrait != isPortrait) {
       setState(() {
@@ -137,8 +135,6 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
       }
     });
 
-    final deviceProfileAsync = ref.watch(deviceProfileProvider);
-
     final scaffold = Scaffold(
       appBar: AppBar(
         title: Text(
@@ -200,7 +196,7 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
                     mediaType: item.tmdbMediaType,
                     heroTag: uniqueTag,
                     placeholderPoster: imageUrl,
-                  ).push(context);
+                  ).push<void>(context);
                 }
               },
             );

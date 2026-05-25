@@ -339,7 +339,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
           RecommendationsCarousel(
             items: item.recommendations!,
             onItemTap: (rec) {
-              DetailsRoute($extra: DetailsRouteExtra(item: rec)).push(context);
+              DetailsRoute(
+                $extra: DetailsRouteExtra(item: rec),
+              ).push<void>(context);
             },
           ),
         ],
@@ -491,7 +493,9 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                 RecommendationsCarousel(
                   items: item.recommendations!,
                   onItemTap: (rec) {
-                    DetailsRoute($extra: DetailsRouteExtra(item: rec)).push(context);
+                    DetailsRoute(
+                      $extra: DetailsRouteExtra(item: rec),
+                    ).push<void>(context);
                   },
                 ),
               ],

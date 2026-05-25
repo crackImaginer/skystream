@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -496,9 +497,11 @@ class _DownloadItemTile extends ConsumerWidget {
     }
 
     if (context.mounted) {
-      ref
-          .read(playbackLauncherProvider)
-          .play(context, file.path, baseItem: item.item);
+      unawaited(
+        ref
+            .read(playbackLauncherProvider)
+            .play(context, file.path, baseItem: item.item),
+      );
     }
   }
 

@@ -30,6 +30,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
+  // Cap Flutter's image cache. Default is 1000 entries / 100 MB which is too
+  // generous for low-RAM TVs and even most phones — decoded TMDB posters fill
+  // it quickly. Tighter limits force earlier eviction and keep raster smooth.
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 200
+    ..maximumSizeBytes = 50 * 1024 * 1024; // 50 MB
+
   // Silence logs in release mode
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
@@ -220,12 +227,14 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   Future<void> _checkAppUpdates() async {
-    if (kDebugMode)
+    if (kDebugMode) {
       debugPrint('[Lifecycle] Starting _checkAppUpdates after 5s delay...');
+    }
     await Future<void>.delayed(const Duration(seconds: 5));
     if (!mounted) {
-      if (kDebugMode)
+      if (kDebugMode) {
         debugPrint('[Lifecycle] _checkAppUpdates aborted: MyApp unmounted');
+      }
       return;
     }
 
@@ -284,16 +293,18 @@ class _MyAppState extends ConsumerState<MyApp> {
       if (next is UpdateAvailable) {
         final navContext = appRouter.routerDelegate.navigatorKey.currentContext;
         if (navContext != null && navContext.mounted) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint(
               '[Lifecycle] State update detected: UpdateAvailable. Showing dialog.',
             );
+          }
           UpdateDialog.show(navContext, next.release);
         } else {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint(
               '[Lifecycle] Update available but navContext not ready/mounted.',
             );
+          }
         }
       }
     });

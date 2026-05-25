@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/router/app_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/cards_wrapper.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
@@ -53,6 +54,10 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
   final FocusNode _carouselFocusNode = FocusNode(debugLabel: 'carousel_anchor');
   bool _isCarouselHovered = false;
   bool _isFocusHighlighted = false;
+  // True while the carousel occupies any visible viewport. Drives autoPlay
+  // so the 15s slide loop pauses when the user scrolls past it — eliminates
+  // off-screen frame work and the resulting battery / raster drain.
+  bool _isVisibleOnScreen = true;
 
   @override
   void initState() {
@@ -104,7 +109,15 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
     final profile = ref.watch(deviceProfileProvider).asData?.value;
     final isTv = profile?.isTv ?? context.isTv;
 
-    return FocusableActionDetector(
+    return VisibilityDetector(
+      key: const Key('explore-carousel-visibility'),
+      onVisibilityChanged: (info) {
+        final visible = info.visibleFraction > 0.1;
+        if (visible != _isVisibleOnScreen && mounted) {
+          setState(() => _isVisibleOnScreen = visible);
+        }
+      },
+      child: FocusableActionDetector(
       focusNode: _carouselFocusNode,
       // Only auto-focus on TV where D-pad is the primary input. On desktop
       // we skip autofocus so the focus ring doesn't appear on app launch
@@ -177,7 +190,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                             options: CarouselOptions(
                               height: heroHeight,
                               viewportFraction: 1.0,
-                              autoPlay: true,
+                              autoPlay: _isVisibleOnScreen,
                               autoPlayInterval: const Duration(seconds: 15),
                               autoPlayAnimationDuration: const Duration(
                                 milliseconds: 1000,
@@ -204,45 +217,49 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                             },
                           ),
 
-                          // Animated Pagination Dots
+                          // Animated Pagination Dots — isolated in a
+                          // RepaintBoundary so the 300ms dot animations don't
+                          // force re-rastering the backdrop image + gradient.
                           Positioned(
                             bottom: 20,
                             left: 0,
                             right: 0,
-                            child: ValueListenableBuilder<int>(
-                              valueListenable: _currentIndexNotifier,
-                              builder: (context, currentIndex, _) {
-                                return Wrap(
-                                  alignment: WrapAlignment.center,
-                                  children: widget.movies.asMap().entries.map((
-                                    entry,
-                                  ) {
-                                    return AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                      width: currentIndex == entry.key
-                                          ? 24.0
-                                          : 8.0,
-                                      height: 8.0,
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 4.0,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(4),
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(
-                                              alpha: currentIndex == entry.key
-                                                  ? 0.9
-                                                  : 0.3,
-                                            ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                );
-                              },
+                            child: RepaintBoundary(
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: _currentIndexNotifier,
+                                builder: (context, currentIndex, _) {
+                                  return Wrap(
+                                    alignment: WrapAlignment.center,
+                                    children: widget.movies.asMap().entries.map((
+                                      entry,
+                                    ) {
+                                      return AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        width: currentIndex == entry.key
+                                            ? 24.0
+                                            : 8.0,
+                                        height: 8.0,
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 4.0,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(4),
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(
+                                                alpha: currentIndex == entry.key
+                                                    ? 0.9
+                                                    : 0.3,
+                                              ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
                             ),
                           ),
 
@@ -279,7 +296,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                       options: CarouselOptions(
                         height: heroHeight,
                         viewportFraction: 1.0,
-                        autoPlay: true,
+                        autoPlay: _isVisibleOnScreen,
                         autoPlayInterval: const Duration(seconds: 15),
                         autoPlayAnimationDuration: const Duration(
                           milliseconds: 1000,
@@ -303,39 +320,41 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                         );
                       },
                     ),
-                    // Animated Pagination Dots
+                    // Animated Pagination Dots — isolated in RepaintBoundary.
                     Positioned(
                       bottom: 20,
                       left: 0,
                       right: 0,
-                      child: ValueListenableBuilder<int>(
-                        valueListenable: _currentIndexNotifier,
-                        builder: (context, currentIndex, _) {
-                          return Wrap(
-                            alignment: WrapAlignment.center,
-                            children: widget.movies.asMap().entries.map((
-                              entry,
-                            ) {
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                width: currentIndex == entry.key ? 24.0 : 8.0,
-                                height: 8.0,
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4.0,
-                                ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(4),
-                                  color: Theme.of(context).colorScheme.onSurface
-                                      .withValues(
-                                        alpha: currentIndex == entry.key
-                                            ? 0.9
-                                            : 0.3,
-                                      ),
-                                ),
-                              );
-                            }).toList(),
-                          );
-                        },
+                      child: RepaintBoundary(
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: _currentIndexNotifier,
+                          builder: (context, currentIndex, _) {
+                            return Wrap(
+                              alignment: WrapAlignment.center,
+                              children: widget.movies.asMap().entries.map((
+                                entry,
+                              ) {
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  width: currentIndex == entry.key ? 24.0 : 8.0,
+                                  height: 8.0,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 4.0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(4),
+                                    color: Theme.of(context).colorScheme.onSurface
+                                        .withValues(
+                                          alpha: currentIndex == entry.key
+                                              ? 0.9
+                                              : 0.3,
+                                        ),
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -343,7 +362,8 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                 ),
               ), // AnimatedContainer
             ),
-    ); // FocusableActionDetector
+      ), // FocusableActionDetector
+    ); // VisibilityDetector
   }
 
   void _navigateToDetails(BuildContext context, MultimediaItem movie) {
@@ -354,7 +374,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
       movieId: movie.id,
       mediaType: mediaType,
       heroTag: 'hero_${movie.id}',
-    ).push(context);
+    ).push<void>(context);
   }
 
   Widget _buildCarouselItem(
@@ -425,7 +445,11 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         }
       },
       borderRadius: BorderRadius.zero,
-      child: ValueListenableBuilder<double>(
+      // Wrap the whole carousel page in its own raster layer so pagination-dot
+      // animations and parent-tree changes don't force re-rasterizing the
+      // backdrop image + gradient on every frame.
+      child: RepaintBoundary(
+        child: ValueListenableBuilder<double>(
         valueListenable: _scrollOffset,
         builder: (context, scrollOffset, child) {
           // Parallax effect: Background moves slower than foreground
@@ -450,6 +474,10 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                     fit: BoxFit.cover,
                     height: height,
                     width: double.infinity,
+                    // Bound decode size to displayed height. The w1280 source
+                    // would otherwise be decoded at full source res into the
+                    // GPU even though we only ever display at heroHeight px.
+                    memCacheHeight: height.round(),
                     placeholder: (context, url) => Container(
                       color: theme.colorScheme.surfaceContainerHighest,
                     ),
@@ -496,87 +524,125 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                   bottom: 50,
                   child: Transform.translate(
                     offset: Offset(0, contentOffset),
-                    child: Opacity(
-                      opacity: opacity,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: isDesktop
-                            ? CrossAxisAlignment.start
-                            : CrossAxisAlignment.center,
-                        children: [
-                          // Logo or Title Fallback
-                          if (logoUrl != null)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: LayoutConstants.spacingLg,
-                              ),
-                              child: _buildLogo(logoUrl, title),
-                            )
-                          else
-                            _buildTitleFallback(title, isDesktop: isDesktop),
-
-                          // Metadata Row (Premium Layout)
-                          Wrap(
-                            alignment: isDesktop
-                                ? WrapAlignment.start
-                                : WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8.0,
-                            runSpacing: 4.0,
-                            children: [
-                              if (provider != null && provider.isNotEmpty) ...[
-                                _buildMiniBadge(
-                                  context,
-                                  provider.toUpperCase(),
-                                  isProvider: true,
-                                ),
-                              ],
-                              if (type != null) ...[
-                                _buildMiniBadge(context, type.toUpperCase()),
-                              ],
-                              if (genres.isNotEmpty) ...[
-                                Text(
-                                  genres,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: Colors.white.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              if (year.isNotEmpty) ...[
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.calendar_today_rounded,
-                                      size: 10,
-                                      color: Colors.white.withValues(alpha: 0.6),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      year,
-                                      style: theme.textTheme.labelSmall?.copyWith(
-                                        color: Colors.white.withValues(alpha: 0.7),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
+                    // Opacity widget triggers a saveLayer every frame even at
+                    // 1.0, which keeps the raster thread busy on idle. Skip it
+                    // entirely until the user actually scrolls and we fade.
+                    child: opacity >= 0.999
+                        ? _buildCarouselContent(
+                            isDesktop: isDesktop,
+                            logoUrl: logoUrl,
+                            title: title,
+                            provider: provider,
+                            type: type,
+                            genres: genres,
+                            year: year,
+                            theme: theme,
+                            context: context,
+                          )
+                        : Opacity(
+                            opacity: opacity,
+                            child: _buildCarouselContent(
+                              isDesktop: isDesktop,
+                              logoUrl: logoUrl,
+                              title: title,
+                              provider: provider,
+                              type: type,
+                              genres: genres,
+                              year: year,
+                              theme: theme,
+                              context: context,
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ],
             ),
           );
         },
+        ),
       ),
+    );
+  }
+
+  Widget _buildCarouselContent({
+    required bool isDesktop,
+    required String? logoUrl,
+    required String title,
+    required String? provider,
+    required String? type,
+    required String genres,
+    required String year,
+    required ThemeData theme,
+    required BuildContext context,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: isDesktop
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      children: [
+        // Logo or Title Fallback
+        if (logoUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(
+              bottom: LayoutConstants.spacingLg,
+            ),
+            child: _buildLogo(logoUrl, title),
+          )
+        else
+          _buildTitleFallback(title, isDesktop: isDesktop),
+
+        // Metadata Row (Premium Layout)
+        Wrap(
+          alignment: isDesktop
+              ? WrapAlignment.start
+              : WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: [
+            if (provider != null && provider.isNotEmpty) ...[
+              _buildMiniBadge(
+                context,
+                provider.toUpperCase(),
+                isProvider: true,
+              ),
+            ],
+            if (type != null) ...[
+              _buildMiniBadge(context, type.toUpperCase()),
+            ],
+            if (genres.isNotEmpty) ...[
+              Text(
+                genres,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+            if (year.isNotEmpty) ...[
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    size: 10,
+                    color: Colors.white.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    year,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 
@@ -692,13 +758,13 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
+        style: const TextStyle(
           color: Colors.white,
           fontSize: 40,
           fontFamily: 'RobotoCondensed',
           fontWeight: FontWeight.w900,
           letterSpacing: 1.0,
-          shadows: const [Shadow(color: Colors.black, blurRadius: 10)],
+          shadows: [Shadow(color: Colors.black, blurRadius: 10)],
         ),
       ),
     );

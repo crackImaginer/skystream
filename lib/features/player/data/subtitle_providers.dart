@@ -46,7 +46,7 @@ class OpenSubtitlesProvider extends SubtitleProvider {
     }
 
     try {
-      final response = await _dio.post(
+      final response = await _dio.post<dynamic>(
         "$baseUrl/login",
         data: {'username': _username, 'password': _password},
         options: Options(
@@ -105,7 +105,7 @@ class OpenSubtitlesProvider extends SubtitleProvider {
       );
     }
     try {
-      final response = await _dio.post(
+      final response = await _dio.post<dynamic>(
         "$baseUrl/login",
         data: {'username': _username, 'password': _password},
         options: Options(
@@ -180,7 +180,7 @@ class OpenSubtitlesProvider extends SubtitleProvider {
       }
 
       try {
-        final response = await _dio.get(
+        final response = await _dio.get<dynamic>(
           "$baseUrl/subtitles",
           queryParameters: params,
           cancelToken: cancelToken,
@@ -189,30 +189,32 @@ class OpenSubtitlesProvider extends SubtitleProvider {
 
         if (response.data == null || response.data['data'] == null) return [];
 
-        final List results = response.data['data'];
+        final List<dynamic> results = response.data['data'] as List;
         if (kDebugMode) {
-          print("[OpenSubtitles] Found ${results.length} results.");
+          debugPrint("[OpenSubtitles] Found ${results.length} results.");
         }
 
-        return results.map((item) {
-          final attr = item['attributes'];
+        return results.map((dynamic item) {
+          final attr = (item as Map)['attributes'] as Map<String, dynamic>;
           final files = attr['files'] as List;
-          final file = files.isNotEmpty ? files.first : null;
-          final featureDetails = attr['feature_details'];
+          final file = files.isNotEmpty ? files.first as Map : null;
+          final featureDetails = attr['feature_details'] as Map?;
 
           final name =
-              attr['release'] ??
-              featureDetails?['title'] ??
-              featureDetails?['movie_name'] ??
+              (attr['release'] as String?) ??
+              (featureDetails?['title'] as String?) ??
+              (featureDetails?['movie_name'] as String?) ??
               query;
 
           return OnlineSubtitle(
-            id: file != null ? file['file_id'].toString() : item['id'],
+            id: file != null
+                ? file['file_id'].toString()
+                : item['id'].toString(),
             name: name,
-            language: attr['language'] ?? langTag,
+            language: (attr['language'] as String?) ?? langTag,
             source: this.name,
             downloadUrl: "", // Requires getDownloadUrl
-            isHearingImpaired: attr['hearing_impaired'] ?? false,
+            isHearingImpaired: (attr['hearing_impaired'] as bool?) ?? false,
             metadata: {'file_id': file != null ? file['file_id'] : null},
           );
         }).toList();
@@ -238,7 +240,7 @@ class OpenSubtitlesProvider extends SubtitleProvider {
             retryHeaders['Authorization'] = 'Bearer $_token';
           }
 
-          final retryResponse = await _dio.get(
+          final retryResponse = await _dio.get<dynamic>(
             "$baseUrl/subtitles",
             queryParameters: params,
             cancelToken: cancelToken,
@@ -250,13 +252,15 @@ class OpenSubtitlesProvider extends SubtitleProvider {
             return [];
           }
 
-          final List results = retryResponse.data['data'];
-          return results.map((item) {
-            final attr = item['attributes'];
+          final List<dynamic> results = retryResponse.data['data'] as List;
+          return results.map((dynamic item) {
+            final attr = (item as Map)['attributes'] as Map<String, dynamic>;
             final files = attr['files'] as List;
-            final file = files.isNotEmpty ? files.first : null;
+            final file = files.isNotEmpty ? files.first as Map : null;
             return OnlineSubtitle(
-              id: file != null ? file['file_id'].toString() : item['id'].toString(),
+              id: file != null
+                  ? file['file_id'].toString()
+                  : item['id'].toString(),
               name: (attr['release'] as String?) ?? query,
               language: (attr['language'] as String?) ?? langTag,
               source: name,
@@ -293,7 +297,7 @@ class OpenSubtitlesProvider extends SubtitleProvider {
         headers['Authorization'] = 'Bearer $_token';
       }
 
-      final response = await _dio.post(
+      final response = await _dio.post<dynamic>(
         "$baseUrl/download",
         data: {'file_id': fileId},
         options: Options(headers: headers),
@@ -380,7 +384,7 @@ class SubDLProvider extends SubtitleProvider {
         );
       }
 
-      final response = await _dio.get(
+      final response = await _dio.get<dynamic>(
         baseUrl,
         queryParameters: params,
         cancelToken: cancelToken,
@@ -393,29 +397,34 @@ class SubDLProvider extends SubtitleProvider {
 
       if (response.data == null || response.data['status'] != true) return [];
 
-      final List data = response.data['subtitles'] ?? [];
-      if (kDebugMode) print("[SubDL] Found ${data.length} results.");
+      final List<dynamic> data =
+          (response.data['subtitles'] as List?) ?? const <dynamic>[];
+      if (kDebugMode) debugPrint("[SubDL] Found ${data.length} results.");
 
-      return data.map((item) {
-        final String rawUrl = (item['url'] as String?) ?? "";
+      return data.map((dynamic item) {
+        final map = item as Map<String, dynamic>;
+        final String rawUrl = (map['url'] as String?) ?? "";
         // SubDL returns relative paths like /subtitle/123.zip
         // Must prepend the download CDN base URL
         final String fullUrl = rawUrl.isNotEmpty
             ? "$downloadBaseUrl${rawUrl.startsWith('/') ? rawUrl : '/$rawUrl'}"
             : "";
         return OnlineSubtitle(
-          id: item['id'].toString(),
-          name: (item['release_name'] as String?) ?? (item['fileName'] as String?) ?? query,
-          language: (item['language'] as String?) ?? langCode,
+          id: map['id'].toString(),
+          name:
+              (map['release_name'] as String?) ??
+              (map['fileName'] as String?) ??
+              query,
+          language: (map['language'] as String?) ?? langCode,
           source: name,
           downloadUrl: fullUrl,
-          isHearingImpaired: item['hi'] == 1,
+          isHearingImpaired: map['hi'] == 1,
           metadata: {'url': fullUrl},
         );
       }).toList();
     } catch (e) {
       if (e is! DioException || e.type != DioExceptionType.cancel) {
-        if (kDebugMode) print("SubDL search error: $e");
+        if (kDebugMode) debugPrint("SubDL search error: $e");
       }
       return [];
     }
@@ -435,7 +444,7 @@ class SubDLProvider extends SubtitleProvider {
   Future<bool> verifyKey() async {
     if (_apiKey != null && _apiKey!.isNotEmpty) {
       try {
-        final response = await _dio.get(
+        final response = await _dio.get<dynamic>(
           baseUrl,
           queryParameters: {
             'api_key': _apiKey!,
@@ -659,8 +668,8 @@ class SubSourceProvider extends SubtitleProvider {
 
       final data = subsResponse.data?['data'];
       final List<dynamic> subs = (data is Map && data['results'] != null)
-          ? data['results']
-          : (data is List ? data : []);
+          ? data['results'] as List<dynamic>
+          : (data is List ? data : const <dynamic>[]);
 
       final results = subs.map((s) {
         final subId = s['subtitleId'] ?? s['id'];
@@ -948,7 +957,7 @@ class SubSourceProvider extends SubtitleProvider {
           ),
         );
         if (kDebugMode && response.statusCode != 200) {
-          print(
+          debugPrint(
             "[SubSource V1] Verification Failed: ${response.statusCode} - ${response.data}",
           );
         }
@@ -973,7 +982,7 @@ class SubSourceProvider extends SubtitleProvider {
         );
       }
       try {
-        final response = await _dio.post(
+        final response = await _dio.post<dynamic>(
           "$baseUrlKeyless/searchMovie",
           data: {'query': 'tt0133093'}, // The Matrix
           options: Options(

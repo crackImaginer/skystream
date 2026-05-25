@@ -208,7 +208,7 @@ class DohService {
 
       if (response.statusCode == 200) {
         final data = response.data is String
-            ? jsonDecode(response.data)
+            ? jsonDecode(response.data as String)
             : response.data;
 
         if (data['Status'] == 0 && data['Answer'] != null) {

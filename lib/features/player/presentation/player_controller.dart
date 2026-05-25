@@ -676,7 +676,7 @@ class PlayerController extends Notifier<PlayerState> {
     VideoController? videoViewController,
   }) async {
     state = const PlayerState(); // Resets all fields including errorMessage
-    _logSub?.cancel();
+    unawaited(_logSub?.cancel());
     _logSub = null;
     _hasConfirmedPlaybackFrame = false;
     _manualSelectionPending = false;
@@ -2257,7 +2257,7 @@ class PlayerController extends Notifier<PlayerState> {
         );
         return;
       }
-      retryNextStream(sourceSessionId: sourceSessionId);
+      unawaited(retryNextStream(sourceSessionId: sourceSessionId));
     }
   }
 
@@ -2293,7 +2293,7 @@ class PlayerController extends Notifier<PlayerState> {
         kind: PlaybackUiPhaseKind.reconnectingLive,
         detail: "Reconnecting to live stream...",
       );
-      changeStream(state.currentStream!, resetPosition: true);
+      unawaited(changeStream(state.currentStream!, resetPosition: true));
     }
   }
 
@@ -2562,7 +2562,7 @@ class PlayerController extends Notifier<PlayerState> {
           source: "Torrent ($fileLabel)",
           headers: {},
         );
-        changeStream(newStream, resetPosition: true);
+        unawaited(changeStream(newStream, resetPosition: true));
       }
     } catch (e) {
       if (kDebugMode) debugPrint("Failed to switch file: $e");
@@ -2836,12 +2836,45 @@ class PlayerController extends Notifier<PlayerState> {
     _completedSub?.cancel();
     _rateSub?.cancel();
     _logSub?.cancel();
+    // _trackSub was previously only cancelled in the ref.onDispose safety
+    // net (line ~661). If the controller is disposed via this explicit path
+    // it would leak the subscription — fixes audit finding H3.
+    _trackSub?.cancel();
+
+    // Best-effort cleanup of subtitle temp files we wrote into the OS temp
+    // dir. Don't await — the player has to close fast, and the next launch
+    // will catch any leftovers. Fixes audit finding H5.
+    unawaited(_cleanupSubtitleTempFiles());
 
     saveProgress();
     ref.read(torrentServiceProvider).stop();
     Future.microtask(() {
       state = const PlayerState();
     });
+  }
+
+  // Walks the OS temp dir and deletes any subtitle file the app's subtitle
+  // download pipeline wrote (naming convention: `sub_*` or `temp_sub_*`).
+  // Pattern-based rather than tracked-set-based because the search flow runs
+  // in a separate provider and tracking handoff is fragile.
+  Future<void> _cleanupSubtitleTempFiles() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      if (!await tempDir.exists()) return;
+      await for (final entity in tempDir.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (name.startsWith('sub_') || name.startsWith('temp_sub_')) {
+          try {
+            await entity.delete();
+          } catch (_) {
+            // Another player session may already have deleted it. Ignore.
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[PlayerController] subtitle cleanup: $e');
+    }
   }
 
   Future<int> _findFirstWorkingStream(
@@ -2883,7 +2916,7 @@ class PlayerController extends Notifier<PlayerState> {
       final results = <int, bool>{}; // idx → isHealthy
 
       for (final idx in candidates) {
-        _isStreamCandidateHealthy(streams[idx])
+        unawaited(_isStreamCandidateHealthy(streams[idx])
             .then((isHealthy) {
               if (completer.isCompleted) return;
               if (!isHealthy) {
@@ -2926,7 +2959,7 @@ class PlayerController extends Notifier<PlayerState> {
               if (results.length == candidates.length) {
                 completer.complete(start);
               }
-            });
+            }));
       }
 
       final winner = await completer.future;

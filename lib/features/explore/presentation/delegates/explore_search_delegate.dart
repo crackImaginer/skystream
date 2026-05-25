@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../shared/widgets/shimmer_placeholder.dart';
-import '../../../../shared/widgets/thumbnail_error_placeholder.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 
 import '../controllers/explore_search_controller.dart';
@@ -178,7 +177,7 @@ class _SearchSuggestionsListState
                 movieId: item.id,
                 mediaType: item.tmdbMediaType,
                 heroTag: 'search_${item.id}',
-              ).push(context);
+              ).push<void>(context);
             },
           ),
         );
@@ -334,7 +333,7 @@ class _SearchResultsGridState extends ConsumerState<_SearchResultsGrid> {
               mediaType: item.tmdbMediaType,
               heroTag: uniqueTag,
               placeholderPoster: imageUrl,
-            ).push(context);
+            ).push<void>(context);
           },
         );
       },

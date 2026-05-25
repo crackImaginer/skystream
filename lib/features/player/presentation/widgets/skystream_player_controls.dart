@@ -370,7 +370,7 @@ class SkyStreamPlayerControlsState
     try {
       if (context.isDesktop &&
           (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
-        toggleFullscreen();
+        unawaited(toggleFullscreen());
         return;
       }
     } catch (e) {
@@ -381,9 +381,11 @@ class SkyStreamPlayerControlsState
 
     if (widget.isLoading || _duration == Duration.zero) return;
     if (_tapPosition != null) {
-      ref.read(playerGestureHandlerProvider.notifier).handleDoubleTap(
-        _tapPosition!,
-        MediaQuery.sizeOf(context).width,
+      unawaited(
+        ref.read(playerGestureHandlerProvider.notifier).handleDoubleTap(
+          _tapPosition!,
+          MediaQuery.sizeOf(context).width,
+        ),
       );
     }
   }

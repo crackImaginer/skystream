@@ -67,11 +67,13 @@ Future<TmdbDetails?> tmdbDetails(Ref ref, MovieDetailsParams params) async {
     }
 
     // Ensure logoUrl is processed
-    String? logoUrl = data['logo_url'];
+    String? logoUrl = data['logo_url'] as String?;
     if (logoUrl == null) {
-      final images = data['images'];
+      final images = data['images'] as Map<String, dynamic>?;
       if (images != null) {
-        final logos = List<Map<String, dynamic>>.from(images['logos'] ?? []);
+        final logos = List<Map<String, dynamic>>.from(
+          (images['logos'] as List?) ?? const <dynamic>[],
+        );
         logoUrl = TmdbService.pickBestLogo(logos, language);
       }
       data['logo_url'] = logoUrl;

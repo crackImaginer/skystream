@@ -51,11 +51,11 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
     }
   }
 
-  void _checkAspectRatio() async {
+  Future<void> _checkAspectRatio() async {
     if (widget.mediaList.isEmpty) return;
     final url = widget.mediaList.first.posterImageUrl;
-    if (url == null || url.isEmpty) return;
-    
+    if (url.isEmpty) return;
+
     final isPortrait = await ImageUtils.isImagePortrait(url);
     if (mounted && _isPortrait != isPortrait) {
       setState(() {
@@ -158,12 +158,14 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
               if (widget.showViewAll)
                 CardsWrapper(
                   onTap: () {
-                    ViewAllRoute($extra: ViewAllRouteExtra(
-                      title: widget.title,
-                      initialMediaList: widget.mediaList,
-                      category: widget.category,
-                      onTap: widget.onTap,
-                    )).push(context);
+                    ViewAllRoute(
+                      $extra: ViewAllRouteExtra(
+                        title: widget.title,
+                        initialMediaList: widget.mediaList,
+                        category: widget.category,
+                        onTap: widget.onTap,
+                      ),
+                    ).push<void>(context);
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
@@ -249,7 +251,7 @@ class _MediaHorizontalListState extends State<MediaHorizontalList> {
                             mediaType: item.tmdbMediaType,
                             heroTag: uniqueTag,
                             placeholderPoster: imageUrl,
-                          ).push(context);
+                          ).push<void>(context);
                         }
                       },
                     ),

@@ -54,12 +54,14 @@ class UpdateController extends _$UpdateController {
       // Removed ref.mounted guard to prevent silent exits; keepAlive ensures state safety.
 
       if (release != null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('[UpdateController] Update AVAILABLE: ${release.tagName}');
+        }
         state = UpdateAvailable(release);
       } else {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('[UpdateController] No update found (status: Initial)');
+        }
         state = UpdateInitial();
       }
     } catch (e) {

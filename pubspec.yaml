@@ -93,6 +93,7 @@ dependencies:
   talker: ^5.1.16
   talker_flutter: ^5.1.16
   talker_riverpod_logger: ^5.1.16
+  visibility_detector: ^0.4.0+2
 
 
 dev_dependencies:
