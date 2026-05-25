@@ -50,7 +50,9 @@ class ViewAllController extends _$ViewAllController {
 
   void init(List<MultimediaItem> initialItems) {
     if (state.items.isEmpty && state.page == 1) {
-      state = state.copyWith(items: List.from(initialItems));
+      // Provider content has no TMDB pagination — show only the initial items.
+      final noMore = category == ViewAllCategory.providerContent;
+      state = state.copyWith(items: List.from(initialItems), hasMore: !noMore);
     }
   }
 
@@ -140,6 +142,10 @@ class ViewAllController extends _$ViewAllController {
             page: nextPage,
           );
           break;
+        case ViewAllCategory.providerContent:
+          // Provider content is fully loaded at init — no pagination.
+          state = state.copyWith(hasMore: false, isLoading: false);
+          return;
       }
 
       if (newItems.isEmpty) {

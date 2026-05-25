@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../../../../shared/widgets/custom_widgets.dart';
+import 'hotstar_player_style.dart';
 import 'player_stream_widgets.dart';
 
 /// Top bar with back button and title for the player.
@@ -13,6 +15,7 @@ class PlayerTopBar extends StatelessWidget {
   final VoidCallback? onBack;
   final bool isTv;
   final FocusNode? backFocusNode;
+  final List<Widget> trailingActions;
 
   const PlayerTopBar({
     super.key,
@@ -21,6 +24,7 @@ class PlayerTopBar extends StatelessWidget {
     this.onBack,
     this.isTv = false,
     this.backFocusNode,
+    this.trailingActions = const [],
   });
 
   @override
@@ -37,8 +41,8 @@ class PlayerTopBar extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.only(
             top: MediaQuery.viewPaddingOf(context).top + 16,
-            left: 16,
-            right: 16,
+            left: 20,
+            right: 20,
             bottom: 8,
           ),
           child: Row(
@@ -50,18 +54,20 @@ class PlayerTopBar extends StatelessWidget {
                 child: const Icon(
                   Icons.arrow_back,
                   color: Colors.white,
-                  size: 36,
+                  size: 34,
                 ),
               ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (subtitle != null)
                       Text(
                         subtitle!,
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: HotstarPlayerStyle.secondaryText,
                           fontSize: 12,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -70,17 +76,18 @@ class PlayerTopBar extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        color: HotstarPlayerStyle.primaryText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
                       overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.left,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 48),
+              const SizedBox(width: 12),
+              ...trailingActions,
             ],
           ),
         ),
@@ -117,40 +124,80 @@ class PlayerCenterControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.center,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Seek Backward
-          CustomButton(
-            showFocusHighlight: isTv,
-            onPressed: onSeekBackward,
-            child: const Icon(Icons.replay_10, color: Colors.white, size: 36),
-          ),
-          const SizedBox(width: 48),
-          // Play/Pause Toggle
-          PlayerPlayPauseButton(
-            player: player,
-            videoViewController: videoViewController,
-            isLoading: isLoading,
-            isTv: isTv,
-            focusNode: playFocusNode,
-            onPressed: onPlayPause,
-          ),
-          const SizedBox(width: 48),
-          // Seek Forward
-          CustomButton(
-            showFocusHighlight: isTv,
-            onPressed: onSeekForward,
-            child: const Icon(Icons.forward_10, color: Colors.white, size: 36),
-          ),
-        ],
+      child: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(0),
+              child: _RoundedPlaybackButton(
+                icon: Icons.keyboard_double_arrow_left_rounded,
+                size: 46,
+                isTv: isTv,
+                onPressed: onSeekBackward,
+              ),
+            ),
+            const SizedBox(width: 64),
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(1),
+              child: PlayerPlayPauseButton(
+                player: player,
+                videoViewController: videoViewController,
+                isLoading: isLoading,
+                isTv: isTv,
+                focusNode: playFocusNode,
+                onPressed: onPlayPause,
+              ),
+            ),
+            const SizedBox(width: 64),
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(2),
+              child: _RoundedPlaybackButton(
+                icon: Icons.keyboard_double_arrow_right_rounded,
+                size: 46,
+                isTv: isTv,
+                onPressed: onSeekForward,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundedPlaybackButton extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final bool isTv;
+  final VoidCallback onPressed;
+
+  const _RoundedPlaybackButton({
+    required this.icon,
+    required this.size,
+    required this.isTv,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomButton(
+      showFocusHighlight: isTv,
+      onPressed: onPressed,
+      shape: const CircleBorder(),
+      child: Container(
+        width: size + 16,
+        height: size + 16,
+        alignment: Alignment.center,
+        child: Icon(icon, color: Colors.white, size: size),
       ),
     );
   }
 }
 
 /// A reusable action button for the player controls bottom bar.
-class PlayerActionButton extends StatelessWidget {
+class PlayerActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -171,44 +218,102 @@ class PlayerActionButton extends StatelessWidget {
   });
 
   @override
+  State<PlayerActionButton> createState() => _PlayerActionButtonState();
+}
+
+class _PlayerActionButtonState extends State<PlayerActionButton> {
+  bool _hovered = false;
+  bool _focused = false;
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isActive = widget.highlight || _hovered || _focused || _pressed;
+
     return FocusTraversalOrder(
-      order: NumericFocusOrder(focusOrder.toDouble()),
-      child: CustomButton(
-        showFocusHighlight: isTv,
-        onPressed: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: rotate ? 0.5 : 0.0),
-                duration: const Duration(milliseconds: 300),
-                builder: (context, value, child) {
-                  return Transform.rotate(
-                    angle: value * 3.14159,
-                    child: Icon(
-                      icon,
-                      color: highlight
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white,
-                      size: 28,
+      order: NumericFocusOrder(widget.focusOrder.toDouble()),
+      child: Focus(
+        onFocusChange: (value) => setState(() => _focused = value),
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.space) {
+            widget.onTap();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() {
+            _hovered = false;
+            _pressed = false;
+          }),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            child: InkWell(
+              onTap: widget.onTap,
+              onHighlightChanged: _setPressed,
+              borderRadius: BorderRadius.circular(6),
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: AnimatedContainer(
+                duration: HotstarPlayerStyle.fastMotionDuration,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 9),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: widget.rotate ? 0.5 : 0.0),
+                      duration: const Duration(milliseconds: 180),
+                      builder: (context, value, child) {
+                        return Transform.rotate(
+                          angle: value * 3.14159,
+                          child: Icon(
+                            widget.icon,
+                            color: isActive
+                                ? HotstarPlayerStyle.accent
+                                : Colors.white,
+                            size: 20,
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: highlight
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.white,
-                  fontSize: 12,
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: isActive
+                            ? HotstarPlayerStyle.accent
+                            : HotstarPlayerStyle.primaryText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
