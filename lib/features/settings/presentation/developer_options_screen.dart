@@ -94,7 +94,11 @@ class _DeveloperOptionsScreenState
                   if (kDebugMode) {
                     unawaited(const AppLogsRoute().push<void>(context));
                   } else {
-                    ref.read(notificationServiceProvider).showInfo('Log tracking requires a debug build to work');
+                    ref
+                        .read(notificationServiceProvider)
+                        .showInfo(
+                          'Log tracking requires a debug build to work',
+                        );
                   }
                 },
               ),
@@ -170,7 +174,6 @@ class _DeveloperOptionsScreenState
         ),
         actions: [
           CustomButton(
-
             onPressed: () => Navigator.pop(context),
             child: Text(
               l10n.cancel,

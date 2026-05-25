@@ -274,7 +274,9 @@ class TmdbSeason {
   factory TmdbSeason.fromJson(Map<String, dynamic> json) {
     return TmdbSeason(
       seasonNumber: (json['season_number'] as int?) ?? 0,
-      name: json['name'] != null ? _unescape.convert(json['name'] as String) : '',
+      name: json['name'] != null
+          ? _unescape.convert(json['name'] as String)
+          : '',
       posterPath: json['poster_path'] as String?,
       episodeCount: (json['episode_count'] as int?) ?? 0,
       airDate: json['air_date'] as String?,
@@ -294,7 +296,9 @@ class TmdbCast {
 
   factory TmdbCast.fromJson(Map<String, dynamic> json) {
     return TmdbCast(
-      name: json['name'] != null ? _unescape.convert(json['name'] as String) : 'Unknown',
+      name: json['name'] != null
+          ? _unescape.convert(json['name'] as String)
+          : 'Unknown',
       character: json['character'] != null
           ? _unescape.convert(json['character'] as String)
           : '',

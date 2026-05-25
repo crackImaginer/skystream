@@ -99,7 +99,7 @@ class SubtitleSearch extends _$SubtitleSearch {
     ref.onDispose(() {
       _cancelToken?.cancel();
     });
-    
+
     // Watch settings to update providers if they change
     ref.listen(playerSettingsProvider, (previous, next) {
       if (next.hasValue) {
@@ -113,12 +113,14 @@ class SubtitleSearch extends _$SubtitleSearch {
 
   void _initializeProviders() {
     final dio = ref.read(dioClientProvider);
-    final settings = ref.read(playerSettingsProvider).asData?.value ?? const PlayerSettings();
-    
+    final settings =
+        ref.read(playerSettingsProvider).asData?.value ??
+        const PlayerSettings();
+
     _providers = [
       OpenSubtitlesProvider(
-        dio, 
-        username: settings.osUsername, 
+        dio,
+        username: settings.osUsername,
         password: settings.osPassword,
         apiKey: settings.osApiKey,
       ),
@@ -138,15 +140,17 @@ class SubtitleSearch extends _$SubtitleSearch {
     // 1. Cancel previous search
     _cancelToken?.cancel();
     _cancelToken = CancelToken();
-    
+
     // 2. Increment search ID to ignore late results from previous calls
     final searchId = ++_activeSearchId;
 
     if (kDebugMode) {
-      print("🔍 [SubtitleSearch] Starting search #$searchId for: $query (IMDB: $imdbId)");
+      print(
+        "🔍 [SubtitleSearch] Starting search #$searchId for: $query (IMDB: $imdbId)",
+      );
     }
     state = const AsyncLoading();
-    
+
     final List<OnlineSubtitle> allResults = [];
     final lang = language ?? ref.read(subtitleLanguageProvider);
     int completedProviders = 0;
@@ -172,7 +176,7 @@ class SubtitleSearch extends _$SubtitleSearch {
         if (kDebugMode) debugPrint("${provider.name} search failed: $e");
       }).whenComplete(() {
         if (!ref.mounted || searchId != _activeSearchId) return;
-        
+
         completedProviders++;
         // If all finished and no results found, ensure we transition from loading to empty data
         if (completedProviders == _providers.length && allResults.isEmpty) {
@@ -186,18 +190,22 @@ class SubtitleSearch extends _$SubtitleSearch {
     _initializeProviders();
     final dio = ref.read(dioClientProvider);
     final provider = _providers.firstWhere((p) => p.name == subtitle.source);
-    
+
     String? url = subtitle.downloadUrl;
     if (url.isEmpty) {
       if (kDebugMode) {
-        print("[SubtitleDownload] No direct URL for '${subtitle.name}' from ${subtitle.source}. Fetching download URL...");
+        print(
+          "[SubtitleDownload] No direct URL for '${subtitle.name}' from ${subtitle.source}. Fetching download URL...",
+        );
       }
       url = await provider.getDownloadUrl(subtitle) ?? "";
     }
-    
+
     if (url.isEmpty) {
       if (kDebugMode) {
-        print("[SubtitleDownload] ❌ Failed: No download URL could be resolved for '${subtitle.name}' from ${subtitle.source}");
+        print(
+          "[SubtitleDownload] ❌ Failed: No download URL could be resolved for '${subtitle.name}' from ${subtitle.source}",
+        );
       }
       return null;
     }
@@ -208,11 +216,14 @@ class SubtitleSearch extends _$SubtitleSearch {
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final savePath = p.join(tempDir.path, "temp_sub_${DateTime.now().millisecondsSinceEpoch}");
-      
+      final savePath = p.join(
+        tempDir.path,
+        "temp_sub_${DateTime.now().millisecondsSinceEpoch}",
+      );
+
       // Use provider-specific headers for the download request
       final downloadHeaders = provider.getDownloadHeaders(subtitle);
-      
+
       final response = await dio.get<List<int>>(
         url,
         options: Options(
@@ -224,15 +235,19 @@ class SubtitleSearch extends _$SubtitleSearch {
 
       if (response.data == null || response.data!.isEmpty) {
         if (kDebugMode) {
-          print("[SubtitleDownload] ❌ Failed: Empty response body from ${subtitle.source} (HTTP ${response.statusCode})");
+          print(
+            "[SubtitleDownload] ❌ Failed: Empty response body from ${subtitle.source} (HTTP ${response.statusCode})",
+          );
         }
         return null;
       }
 
       final List<int> bytes = response.data!;
-      
+
       if (kDebugMode) {
-        print("[SubtitleDownload] Received ${bytes.length} bytes from ${subtitle.source}");
+        print(
+          "[SubtitleDownload] Received ${bytes.length} bytes from ${subtitle.source}",
+        );
       }
 
       // Detect archive format by magic bytes
@@ -250,7 +265,9 @@ class SubtitleSearch extends _$SubtitleSearch {
           return extractedPath;
         }
         if (kDebugMode) {
-          debugPrint("[SubtitleDownload] ❌ ZIP contained no .srt/.vtt/.ass files.");
+          debugPrint(
+            "[SubtitleDownload] ❌ ZIP contained no .srt/.vtt/.ass files.",
+          );
         }
       } else if (bytes.length > 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
         // GZIP compressed file — also offloaded to worker isolate.
@@ -262,10 +279,16 @@ class SubtitleSearch extends _$SubtitleSearch {
         final subFile = File("$savePath.srt");
         await subFile.writeAsBytes(decompressed);
         return subFile.path;
-      } else if (bytes.length > 4 && bytes[0] == 0x52 && bytes[1] == 0x61 && bytes[2] == 0x72 && bytes[3] == 0x21) {
+      } else if (bytes.length > 4 &&
+          bytes[0] == 0x52 &&
+          bytes[1] == 0x61 &&
+          bytes[2] == 0x72 &&
+          bytes[3] == 0x21) {
         // RAR archive - not supported
         if (kDebugMode) {
-          print("[SubtitleDownload] ❌ RAR archive detected but not supported. Source: ${subtitle.source}");
+          print(
+            "[SubtitleDownload] ❌ RAR archive detected but not supported. Source: ${subtitle.source}",
+          );
         }
         return null;
       } else {
@@ -277,24 +300,30 @@ class SubtitleSearch extends _$SubtitleSearch {
       }
     } on DioException catch (e) {
       if (kDebugMode) {
-        print("[SubtitleDownload] ❌ HTTP Error from ${subtitle.source}: "
-            "Status=${e.response?.statusCode}, "
-            "Message=${e.message}, "
-            "URL=$url");
+        print(
+          "[SubtitleDownload] ❌ HTTP Error from ${subtitle.source}: "
+          "Status=${e.response?.statusCode}, "
+          "Message=${e.message}, "
+          "URL=$url",
+        );
         if (e.response?.data != null) {
           // Try to read error body if it's text
           try {
             final body = e.response?.data is List<int>
                 ? String.fromCharCodes(e.response!.data as List<int>)
                 : e.response?.data.toString();
-            print("[SubtitleDownload] Response body: ${body?.substring(0, (body.length > 200 ? 200 : body.length))}");
+            print(
+              "[SubtitleDownload] Response body: ${body?.substring(0, (body.length > 200 ? 200 : body.length))}",
+            );
           } catch (_) {}
         }
       }
       return null;
     } catch (e, stack) {
       if (kDebugMode) {
-        print("[SubtitleDownload] ❌ Unexpected error from ${subtitle.source}: $e");
+        print(
+          "[SubtitleDownload] ❌ Unexpected error from ${subtitle.source}: $e",
+        );
         print("[SubtitleDownload] Stack: $stack");
       }
       return null;

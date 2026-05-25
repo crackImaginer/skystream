@@ -357,9 +357,7 @@ class _MyAppState extends ConsumerState<MyApp> {
           },
         );
 
-        return DpadNavigator(
-          child: materialApp,
-        );
+        return DpadNavigator(child: materialApp);
       },
     );
   }

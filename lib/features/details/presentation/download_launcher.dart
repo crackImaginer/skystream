@@ -178,7 +178,10 @@ class DownloadLauncher {
                   Navigator.of(ctx).pop();
                 },
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Text(l10n.cancel),
                 ),
               ),
@@ -358,4 +361,3 @@ class DownloadLauncher {
     return '.mp4'; // Default
   }
 }
-

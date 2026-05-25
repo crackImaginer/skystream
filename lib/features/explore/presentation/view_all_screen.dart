@@ -70,7 +70,6 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
     if (widget.initialMediaList.isEmpty) return;
     final url = widget.initialMediaList.first.posterImageUrl;
     if (url.isEmpty) return;
-
     final isPortrait = await ImageUtils.isImagePortrait(url);
     if (mounted && _isPortrait != isPortrait) {
       setState(() {
@@ -122,8 +121,8 @@ class _ViewAllScreenState extends ConsumerState<ViewAllScreen> {
 
     // Calculate aspect ratio dynamically
     final isDesktop = context.isDesktop;
-    final maxExtent = isDesktop 
-        ? (_isPortrait ? 240.0 : 340.0) 
+    final maxExtent = isDesktop
+        ? (_isPortrait ? 240.0 : 340.0)
         : (_isPortrait ? 150.0 : 220.0);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final crossAxisCount = (screenWidth / maxExtent).ceil();

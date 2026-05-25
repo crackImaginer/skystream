@@ -51,6 +51,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   bool _isTv = false;
   bool _isTablet = false;
   bool _wasPlayingBeforeBackground = false;
+  bool _spaceHeldForSpeed = false;
+  double? _speedBeforeSpaceHold;
+  Timer? _spaceHoldTimer;
 
   late final PlayerController _playerController;
 
@@ -184,6 +187,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         }
       }
     }
+    _spaceHoldTimer?.cancel();
+    if (_spaceHeldForSpeed) {
+      final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
+      unawaited(_playerController.setPlaybackSpeed(previousSpeed));
+    }
     if (!Platform.isAndroid && !Platform.isIOS) {
       try {
         windowManager.setFullScreen(false);
@@ -198,6 +206,56 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (!_isTv && event.logicalKey == LogicalKeyboardKey.space) {
+      if (event is KeyDownEvent) {
+        _spaceHoldTimer ??= Timer(const Duration(milliseconds: 260), () {
+          if (!mounted || _spaceHeldForSpeed) return;
+          _spaceHeldForSpeed = true;
+          _speedBeforeSpaceHold = ref
+              .read(playerControllerProvider)
+              .playbackSpeed;
+          unawaited(
+            ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
+          );
+        });
+        return KeyEventResult.handled;
+      }
+      if (event is KeyRepeatEvent) {
+        if (!_spaceHeldForSpeed) {
+          _spaceHoldTimer?.cancel();
+          _spaceHoldTimer = null;
+          _spaceHeldForSpeed = true;
+          _speedBeforeSpaceHold = ref
+              .read(playerControllerProvider)
+              .playbackSpeed;
+          unawaited(
+            ref.read(playerControllerProvider.notifier).setPlaybackSpeed(2.0),
+          );
+        }
+        return KeyEventResult.handled;
+      }
+      if (event is KeyUpEvent) {
+        _spaceHoldTimer?.cancel();
+        _spaceHoldTimer = null;
+        if (!_spaceHeldForSpeed) {
+          _controlsKeyFinal.currentState?.togglePlayPause();
+          if (!_controlsVisible.value) {
+            _controlsKeyFinal.currentState?.showControls();
+          }
+          return KeyEventResult.handled;
+        }
+        final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
+        _spaceHeldForSpeed = false;
+        _speedBeforeSpaceHold = null;
+        unawaited(
+          ref
+              .read(playerControllerProvider.notifier)
+              .setPlaybackSpeed(previousSpeed),
+        );
+        return KeyEventResult.handled;
+      }
+    }
+
     // Only handle KeyDown and KeyRepeat for volume/seeking
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -224,8 +282,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     // Intercept standard playback keys
-    if (event.logicalKey == LogicalKeyboardKey.space ||
-        event.logicalKey == LogicalKeyboardKey.select ||
+    if (event.logicalKey == LogicalKeyboardKey.select ||
         event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.mediaPlayPause) {
       _controlsKeyFinal.currentState?.togglePlayPause();
@@ -417,9 +474,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                               subtitleViewConfiguration:
                                   const SubtitleViewConfiguration(
                                     visible: false,
-                                    style: TextStyle(
-                                      color: Colors.transparent,
-                                    ),
+                                    style: TextStyle(color: Colors.transparent),
                                   ),
                               controls: (state) => const SizedBox.shrink(),
                             );

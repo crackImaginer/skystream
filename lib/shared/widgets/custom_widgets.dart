@@ -124,7 +124,8 @@ class _CustomSliderState extends State<CustomSlider> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          border: (_isFocused &&
+          border:
+              (_isFocused &&
                   FocusManager.instance.highlightMode ==
                       FocusHighlightMode.traditional)
               ? Border.all(
@@ -146,7 +147,8 @@ class _CustomSliderState extends State<CustomSlider> {
             onChanged: widget.onChanged,
             onChangeStart: widget.onChangeStart,
             onChangeEnd: widget.onChangeEnd,
-            activeColor: widget.activeColor ??
+            activeColor:
+                widget.activeColor ??
                 ((_isFocused &&
                         FocusManager.instance.highlightMode ==
                             FocusHighlightMode.traditional)
@@ -285,6 +287,7 @@ class CustomButton extends StatefulWidget {
   final FocusNode? focusNode;
   final Color? backgroundColor;
   final OutlinedBorder? shape;
+  final bool showFocusHighlight;
 
   const CustomButton({
     super.key,
@@ -296,6 +299,7 @@ class CustomButton extends StatefulWidget {
     this.focusNode,
     this.backgroundColor,
     this.shape,
+    this.showFocusHighlight = false,
   });
 
   @override
@@ -332,8 +336,10 @@ class _CustomButtonState extends State<CustomButton> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTraditional = FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    final showHighlight = _isFocused && isTraditional;
+    final isTraditional =
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    final showHighlight =
+        widget.showFocusHighlight && _isFocused && isTraditional;
 
     // Wrap in an AnimatedScale + Container so focused buttons get a clear
     // "elevation" cue regardless of their fill color. Useful on TV where blue

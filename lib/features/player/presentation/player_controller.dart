@@ -345,15 +345,8 @@ class PlayerController extends Notifier<PlayerState> {
   List<SubtitleFile> get userAddedExternalSubtitles =>
       _userAddedExternalSubtitles;
 
-  Set<String>? get pendingVideoViewSubtitleIdsBeforeReload =>
-      _pendingVideoViewSubtitleIdsBeforeReload;
-  set pendingVideoViewSubtitleIdsBeforeReload(Set<String>? values) =>
-      _pendingVideoViewSubtitleIdsBeforeReload = values;
-
-  bool get selectNewestVideoViewSubtitleAfterReload =>
-      _selectNewestVideoViewSubtitleAfterReload;
-  set selectNewestVideoViewSubtitleAfterReload(bool value) =>
-      _selectNewestVideoViewSubtitleAfterReload = value;
+  Set<String>? pendingVideoViewSubtitleIdsBeforeReload;
+  bool selectNewestVideoViewSubtitleAfterReload = false;
 
   void updateState(PlayerState Function(PlayerState s) update) {
     state = update(state);
@@ -434,10 +427,9 @@ class PlayerController extends Notifier<PlayerState> {
   bool _isApplyingPendingResumeSeek = false;
   double _lastNonZeroVolumeLevel = 1.0;
   final List<SubtitleFile> _userAddedExternalSubtitles = [];
-  Set<String>? _pendingVideoViewSubtitleIdsBeforeReload;
-  bool _selectNewestVideoViewSubtitleAfterReload = false;
   bool _hasConfirmedPlaybackFrame = false;
   bool _suppressNextEpisodeDetection = false;
+  bool _nextEpisodeOverlayDismissedForCurrentEnding = false;
   bool _manualSelectionPending = false;
   // Audio tracks that have already failed with decode errors for the current
   // stream. When one track fails, we try the next one before source-switching.
@@ -688,8 +680,8 @@ class PlayerController extends Notifier<PlayerState> {
     _pendingResumeSeekPosition = null;
     _isApplyingPendingResumeSeek = false;
     _userAddedExternalSubtitles.clear();
-    _pendingVideoViewSubtitleIdsBeforeReload = null;
-    _selectNewestVideoViewSubtitleAfterReload = false;
+    pendingVideoViewSubtitleIdsBeforeReload = null;
+    selectNewestVideoViewSubtitleAfterReload = false;
 
     _item = item;
 
@@ -802,10 +794,10 @@ class PlayerController extends Notifier<PlayerState> {
           _suppressNextEpisodeDetection = false;
         }
 
-        if (_selectNewestVideoViewSubtitleAfterReload &&
+        if (selectNewestVideoViewSubtitleAfterReload &&
             info.subtitleTracks.isNotEmpty) {
           final previousIds =
-              _pendingVideoViewSubtitleIdsBeforeReload ?? const <String>{};
+              pendingVideoViewSubtitleIdsBeforeReload ?? const <String>{};
           final newTrackId =
               info.subtitleTracks.keys.firstWhereOrNull(
                 (id) => !previousIds.contains(id),
@@ -815,8 +807,8 @@ class PlayerController extends Notifier<PlayerState> {
             _videoViewController!.setShowSubtitle(true);
             _videoViewController!.setOverrideSubtitle(newTrackId);
           }
-          _pendingVideoViewSubtitleIdsBeforeReload = null;
-          _selectNewestVideoViewSubtitleAfterReload = false;
+          pendingVideoViewSubtitleIdsBeforeReload = null;
+          selectNewestVideoViewSubtitleAfterReload = false;
         }
       }
     });
@@ -861,8 +853,8 @@ class PlayerController extends Notifier<PlayerState> {
     _videoViewController!.error.addListener(() {
       final error = _videoViewController!.error.value;
       if (error != null) {
-        _pendingVideoViewSubtitleIdsBeforeReload = null;
-        _selectNewestVideoViewSubtitleAfterReload = false;
+        pendingVideoViewSubtitleIdsBeforeReload = null;
+        selectNewestVideoViewSubtitleAfterReload = false;
         if (kDebugMode) debugPrint("VideoView Player Error: $error");
         if (!_hasConfirmedPlaybackFrame ||
             (_videoViewController!.position.value) == 0) {
@@ -878,7 +870,7 @@ class PlayerController extends Notifier<PlayerState> {
               "Selected source is not playable. Reverting back to previous source.",
             );
           } else {
-            retryNextStream(sourceSessionId: state.sourceSessionId);
+            unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
           }
         } else {
           // Error during active playback.
@@ -894,7 +886,7 @@ class PlayerController extends Notifier<PlayerState> {
               kind: PlaybackUiPhaseKind.reconnectingLive,
               detail: "Reconnecting to live stream...",
             );
-            changeStream(state.currentStream!, resetPosition: true);
+            unawaited(changeStream(state.currentStream!, resetPosition: true));
             Future.delayed(const Duration(seconds: 10), () {
               _isRecoveringFromStall = false;
             });
@@ -907,7 +899,7 @@ class PlayerController extends Notifier<PlayerState> {
           );
           _revertMessage =
               "Current source stopped unexpectedly. Trying next available source...";
-          retryNextStream(sourceSessionId: state.sourceSessionId);
+          unawaited(retryNextStream(sourceSessionId: state.sourceSessionId));
         }
       }
     });
@@ -936,7 +928,7 @@ class PlayerController extends Notifier<PlayerState> {
             kind: PlaybackUiPhaseKind.reconnectingLive,
             detail: "Reconnecting to live stream...",
           );
-          changeStream(state.currentStream!, resetPosition: true);
+          unawaited(changeStream(state.currentStream!, resetPosition: true));
         }
       }
     });
@@ -964,7 +956,13 @@ class PlayerController extends Notifier<PlayerState> {
       if (!_suppressNextEpisodeDetection &&
           _item.contentType == MultimediaContentType.series) {
         final remainingSecs = (durationMs - posMs) / 1000;
-        if (remainingSecs <= 15 &&
+        if (remainingSecs > 15) {
+          _nextEpisodeOverlayDismissedForCurrentEnding = false;
+          if (state.showNextEpisodeOverlay) {
+            state = state.copyWith(showNextEpisodeOverlay: false);
+          }
+        } else if (!_nextEpisodeOverlayDismissedForCurrentEnding &&
+            remainingSecs <= 15 &&
             remainingSecs > 0 &&
             !state.showNextEpisodeOverlay) {
           int? currentIndex;
@@ -987,8 +985,6 @@ class PlayerController extends Notifier<PlayerState> {
               nextEpisodeTitle: next.name,
             );
           }
-        } else if (remainingSecs > 15 && state.showNextEpisodeOverlay) {
-          state = state.copyWith(showNextEpisodeOverlay: false);
         }
       }
     });
@@ -1234,7 +1230,7 @@ class PlayerController extends Notifier<PlayerState> {
             kind: PlaybackUiPhaseKind.reconnectingLive,
             detail: "Reconnecting to live stream...",
           );
-          changeStream(state.currentStream!, resetPosition: true);
+          unawaited(changeStream(state.currentStream!, resetPosition: true));
           Future.delayed(const Duration(seconds: 10), () {
             _isRecoveringFromStall = false;
           });
@@ -1291,7 +1287,7 @@ class PlayerController extends Notifier<PlayerState> {
             kind: PlaybackUiPhaseKind.reconnectingLive,
             detail: "Reconnecting to live stream...",
           );
-          changeStream(state.currentStream!, resetPosition: true);
+          unawaited(changeStream(state.currentStream!, resetPosition: true));
         }
       }
     });
@@ -1321,7 +1317,9 @@ class PlayerController extends Notifier<PlayerState> {
 
             // Recovery: reconnect live streams from scratch; kick VOD.
             if (state.isLive && state.currentStream != null) {
-              changeStream(state.currentStream!, resetPosition: true);
+              unawaited(
+                changeStream(state.currentStream!, resetPosition: true),
+              );
             } else {
               _player.play();
             }
@@ -1357,7 +1355,13 @@ class PlayerController extends Notifier<PlayerState> {
       if (!_suppressNextEpisodeDetection &&
           _item.contentType == MultimediaContentType.series) {
         final remaining = duration - pos;
-        if (remaining.inSeconds <= 15 &&
+        if (remaining.inSeconds > 15) {
+          _nextEpisodeOverlayDismissedForCurrentEnding = false;
+          if (state.showNextEpisodeOverlay) {
+            state = state.copyWith(showNextEpisodeOverlay: false);
+          }
+        } else if (!_nextEpisodeOverlayDismissedForCurrentEnding &&
+            remaining.inSeconds <= 15 &&
             remaining.inSeconds > 0 &&
             !state.showNextEpisodeOverlay) {
           // Use _episode if available, otherwise fallback to URL matching
@@ -1381,8 +1385,6 @@ class PlayerController extends Notifier<PlayerState> {
               nextEpisodeTitle: next.name,
             );
           }
-        } else if (remaining.inSeconds > 15 && state.showNextEpisodeOverlay) {
-          state = state.copyWith(showNextEpisodeOverlay: false);
         }
       }
     });
@@ -1883,12 +1885,16 @@ class PlayerController extends Notifier<PlayerState> {
     await _player.pause();
   }
 
-  Future<void> togglePlayPause() async {
-    final isPlaying = state.useExoPlayer && _videoViewController != null
-        ? _videoViewController!.playbackState.value ==
-              VideoControllerPlaybackState.playing
-        : _player.state.playing;
+  bool get isPlaying {
+    if (state.useExoPlayer && _videoViewController != null) {
+      return _videoViewController!.playbackState.value ==
+          VideoControllerPlaybackState.playing;
+    }
 
+    return _player.state.playing;
+  }
+
+  Future<void> togglePlayPause() async {
     if (isPlaying) {
       await pause();
     } else {
@@ -2603,6 +2609,7 @@ class PlayerController extends Notifier<PlayerState> {
 
       // NOW switch context to the next episode.
       _suppressNextEpisodeDetection = true;
+      _nextEpisodeOverlayDismissedForCurrentEnding = false;
       _hasConfirmedPlaybackFrame = false;
       _videoUrl = finalUrl;
       _episode = nextEpisode;
@@ -2620,6 +2627,7 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   void dismissNextEpisodeOverlay() {
+    _nextEpisodeOverlayDismissedForCurrentEnding = true;
     state = state.copyWith(showNextEpisodeOverlay: false);
   }
 
@@ -2653,6 +2661,7 @@ class PlayerController extends Notifier<PlayerState> {
     _videoUrl = finalUrl;
     _hasConfirmedPlaybackFrame = false;
     _suppressNextEpisodeDetection = true;
+    _nextEpisodeOverlayDismissedForCurrentEnding = false;
     _userAddedExternalSubtitles.clear();
 
     state = state.copyWith(
@@ -2916,17 +2925,18 @@ class PlayerController extends Notifier<PlayerState> {
       final results = <int, bool>{}; // idx → isHealthy
 
       for (final idx in candidates) {
-        unawaited(_isStreamCandidateHealthy(streams[idx])
-            .then((isHealthy) {
-              if (completer.isCompleted) return;
-              if (!isHealthy) {
-                _markSourceAttempt(
-                  idx,
-                  SourceAttemptStatus.failed,
-                  isCurrent: false,
-                );
-              }
-              results[idx] = isHealthy;
+        unawaited(
+          _isStreamCandidateHealthy(streams[idx])
+              .then((isHealthy) {
+                if (completer.isCompleted) return;
+                if (!isHealthy) {
+                  _markSourceAttempt(
+                    idx,
+                    SourceAttemptStatus.failed,
+                    isCurrent: false,
+                  );
+                }
+                results[idx] = isHealthy;
 
               // Walk candidates in preference order; stop at the first one
               // whose result we have and which is healthy.
@@ -3202,7 +3212,9 @@ class PlayerController extends Notifier<PlayerState> {
         // its whitelist, causing audio-only playback when video segments use
         // non-standard extensions.
         demuxerLavfOpts.add('allowed_extensions=ALL');
-        demuxerLavfOpts.add('icy=0'); // suppress Icy-MetaData:1 on segment fetches too
+        demuxerLavfOpts.add(
+          'icy=0',
+        ); // suppress Icy-MetaData:1 on segment fetches too
 
         // HLS manifests declare codec/language via EXT-X-MEDIA and EXT-X-MAP
         // tags, so FFmpeg doesn't need deep probing to detect streams. The
@@ -3802,20 +3814,20 @@ class PlayerController extends Notifier<PlayerState> {
       }
 
       if (state.useExoPlayer && state.currentStream != null) {
-        _pendingVideoViewSubtitleIdsBeforeReload = _videoViewController
+        pendingVideoViewSubtitleIdsBeforeReload = _videoViewController
             ?.mediaInfo
             .value
             ?.subtitleTracks
             .keys
             .toSet();
-        _selectNewestVideoViewSubtitleAfterReload =
+        selectNewestVideoViewSubtitleAfterReload =
             !(Platform.isMacOS || Platform.isIOS);
 
         await changeStream(state.currentStream!, resetPosition: false);
 
         if (!state.useExoPlayer) {
-          _pendingVideoViewSubtitleIdsBeforeReload = null;
-          _selectNewestVideoViewSubtitleAfterReload = false;
+          pendingVideoViewSubtitleIdsBeforeReload = null;
+          selectNewestVideoViewSubtitleAfterReload = false;
           await selectSubtitleTrack('external:${newSub.url}');
         }
         return;
