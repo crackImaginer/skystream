@@ -25,6 +25,19 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
   InAppWebViewController? webViewController;
   double progress = 0;
   final TextEditingController _urlController = TextEditingController();
+  bool _isPopped = false;
+
+  void _handleRedirect(WebUri? url) {
+    if (url == null || _isPopped) return;
+    final urlStr = url.toString();
+    if (urlStr.startsWith(widget.redirectUrlPrefix) ||
+        (widget.providerName == 'AniList' &&
+            (urlStr.startsWith('http://localhost') ||
+                urlStr.startsWith('https://anilist.co/api/v2/oauth/pin')))) {
+      _isPopped = true;
+      Navigator.of(context).pop(urlStr);
+    }
+  }
 
   @override
   void dispose() {
@@ -129,13 +142,32 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
               Expanded(
                 child: InAppWebView(
                   initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+                  initialSettings: InAppWebViewSettings(
+                    useShouldOverrideUrlLoading: true,
+                    javaScriptEnabled: true,
+                  ),
                   onWebViewCreated: (controller) {
                     webViewController = controller;
                   },
                   onLoadStart: (controller, url) {
+                    _handleRedirect(url);
+                  },
+                  onLoadStop: (controller, url) {
+                    _handleRedirect(url);
+                  },
+                  onUpdateVisitedHistory: (controller, url, isReload) {
+                    _handleRedirect(url);
+                  },
+                  onReceivedError: (controller, request, error) {
+                    _handleRedirect(request.url);
+                  },
+                  shouldOverrideUrlLoading: (controller, navigationAction) async {
+                    final url = navigationAction.request.url;
                     if (url != null && url.toString().startsWith(widget.redirectUrlPrefix)) {
-                      Navigator.pop(context, url.toString());
+                      _handleRedirect(url);
+                      return NavigationActionPolicy.CANCEL;
                     }
+                    return NavigationActionPolicy.ALLOW;
                   },
                   onProgressChanged: (controller, progress) {
                     setState(() {

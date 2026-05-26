@@ -82,6 +82,7 @@ jobs:
             "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
             "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
           }
@@ -130,6 +131,7 @@ jobs:
             "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
             "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
           }
@@ -198,6 +200,7 @@ jobs:
             "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
             "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
           }
@@ -329,6 +332,7 @@ jobs:
             "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
             "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
           }
@@ -415,6 +419,7 @@ jobs:
             "TRAKT_CLIENT_ID": "${{ secrets.TRAKT_CLIENT_ID }}",
             "TRAKT_CLIENT_SECRET": "${{ secrets.TRAKT_CLIENT_SECRET }}",
             "MAL_CLIENT_ID": "${{ secrets.MAL_CLIENT_ID }}",
+            "MAL_CLIENT_SECRET": "${{ secrets.MAL_CLIENT_SECRET }}",
             "ANILIST_CLIENT_ID": "${{ secrets.ANILIST_CLIENT_ID }}",
             "ANIMESKIP_CLIENT_ID": "${{ secrets.ANIMESKIP_CLIENT_ID }}"
           }

@@ -7,6 +7,7 @@ class SyncConfig {
   static const String anilistClientId = String.fromEnvironment('ANILIST_CLIENT_ID');
   
   static const String malClientId = String.fromEnvironment('MAL_CLIENT_ID');
+  static const String malClientSecret = String.fromEnvironment('MAL_CLIENT_SECRET');
   
   static const String simklClientId = String.fromEnvironment('SIMKL_CLIENT_ID');
   static const String simklClientSecret = String.fromEnvironment('SIMKL_CLIENT_SECRET');

@@ -62,8 +62,20 @@ class SyncManager {
     _cachedItemUrl = null;
   }
 
+  bool _shouldSkipSync(MultimediaItem item) {
+    if (item.contentType == MultimediaContentType.livestream) {
+      return true;
+    }
+    final hasNoIds = item.imdbId == null &&
+        item.tmdbId == null &&
+        (item.syncData == null || item.syncData!.isEmpty);
+    return hasNoIds;
+  }
+
   /// Mark an episode or movie as watched across all active services
   Future<void> markWatched(MultimediaItem item, Episode? episode) async {
+    if (_shouldSkipSync(item)) return;
+
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
@@ -80,6 +92,8 @@ class SyncManager {
 
   /// Scrobble start event
   Future<void> scrobbleStart(MultimediaItem item, Episode? episode, double progress) async {
+    if (_shouldSkipSync(item)) return;
+
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
@@ -96,6 +110,8 @@ class SyncManager {
 
   /// Scrobble pause event
   Future<void> scrobblePause(MultimediaItem item, Episode? episode, double progress) async {
+    if (_shouldSkipSync(item)) return;
+
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
@@ -112,6 +128,8 @@ class SyncManager {
 
   /// Scrobble stop event
   Future<void> scrobbleStop(MultimediaItem item, Episode? episode, double progress) async {
+    if (_shouldSkipSync(item)) return;
+
     final active = await getActiveServices();
     if (active.isEmpty) return;
 
@@ -128,6 +146,8 @@ class SyncManager {
 
   /// Add item to "Plan to Watch" across all active services
   Future<void> addToPlanToWatch(MultimediaItem item) async {
+    if (_shouldSkipSync(item)) return;
+
     final active = await getActiveServices();
     if (active.isEmpty) return;
 

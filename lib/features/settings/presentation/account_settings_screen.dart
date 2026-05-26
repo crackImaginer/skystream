@@ -8,8 +8,10 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_dialogs.dart';
 import 'widgets/tracking_auth_dialog.dart';
+import 'widgets/webview_auth_dialog.dart';
 import 'player_settings_provider.dart';
 
+import '../../../core/config/sync_config.dart';
 import '../../tracking/presentation/tracking_auth_provider.dart';
 import '../../tracking/data/simkl_service.dart';
 import '../../tracking/data/trakt_service.dart';
@@ -286,34 +288,46 @@ class AccountSettingsScreen extends ConsumerWidget {
                                   }
                                 }
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Coming soon')),
-                                );
-                                /*
-                                await ref
-                                    .read(malServiceProvider)
-                                    .login(
-                                      onWebViewRequested: (url) async {
-                                        if (context.mounted) {
-                                          final result =
-                                              await showDialog<String>(
-                                                context: context,
-                                                builder: (context) =>
-                                                    WebViewAuthDialog(
-                                                      providerName:
-                                                          'MyAnimeList',
-                                                      initialUrl: url,
-                                                      redirectUrlPrefix:
-                                                          'http://localhost',
-                                                    ),
-                                              );
-                                          if (result != null) {
-                                            print('MAL Auth Result: $result');
-                                          }
-                                        }
-                                      },
-                                    );
-                                */
+                                final malService = ref.read(malServiceProvider);
+                                // Generate PKCE verifier before opening webview
+                                final codeVerifier = malService.generateCodeVerifier();
+
+                                final authUrl = 'https://myanimelist.net/v1/oauth2/authorize'
+                                    '?response_type=code'
+                                    '&client_id=${SyncConfig.malClientId}'
+                                    '&code_challenge=$codeVerifier'
+                                    '&code_challenge_method=plain'
+                                    '&redirect_uri=${Uri.encodeComponent('http://localhost')}';
+
+                                if (context.mounted) {
+                                  final redirectUrl = await showDialog<String>(
+                                    context: context,
+                                    builder: (context) => WebViewAuthDialog(
+                                      providerName: 'MyAnimeList',
+                                      initialUrl: authUrl,
+                                      redirectUrlPrefix: 'http://localhost',
+                                    ),
+                                  );
+
+                                  if (redirectUrl != null && context.mounted) {
+                                    final success = await malService.exchangeCodeForToken(redirectUrl, codeVerifier);
+                                    if (success && context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Successfully connected to MyAnimeList!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } else if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Failed to connect to MyAnimeList'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
                               }
                               ref.invalidate(trackingAuthProvider);
                             },
@@ -346,35 +360,41 @@ class AccountSettingsScreen extends ConsumerWidget {
                                   }
                                 }
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Coming soon')),
-                                );
-                                /*
-                                await ref
-                                    .read(aniListServiceProvider)
-                                    .login(
-                                      onWebViewRequested: (url) async {
-                                        if (context.mounted) {
-                                          final result =
-                                              await showDialog<String>(
-                                                context: context,
-                                                builder: (context) =>
-                                                    WebViewAuthDialog(
-                                                      providerName: 'AniList',
-                                                      initialUrl: url,
-                                                      redirectUrlPrefix:
-                                                          'http://localhost',
-                                                    ),
-                                              );
-                                          if (result != null) {
-                                            print(
-                                              'AniList Auth Result: $result',
-                                            );
-                                          }
-                                        }
-                                      },
-                                    );
-                                */
+                                final anilistService = ref.read(aniListServiceProvider);
+
+                                final authUrl = 'https://anilist.co/api/v2/oauth/authorize'
+                                    '?client_id=${SyncConfig.anilistClientId}'
+                                    '&response_type=token';
+
+                                if (context.mounted) {
+                                  final redirectUrl = await showDialog<String>(
+                                    context: context,
+                                    builder: (context) => WebViewAuthDialog(
+                                      providerName: 'AniList',
+                                      initialUrl: authUrl,
+                                      redirectUrlPrefix: 'http://localhost',
+                                    ),
+                                  );
+
+                                  if (redirectUrl != null && context.mounted) {
+                                    final success = await anilistService.saveTokenFromRedirect(redirectUrl);
+                                    if (success && context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Successfully connected to AniList!'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } else if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Failed to connect to AniList'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
                               }
                               ref.invalidate(trackingAuthProvider);
                             },

@@ -132,28 +132,64 @@ class SimklService implements TrackingService {
       } else if (item.tmdbId != null) {
         queryParams['tmdb'] = item.tmdbId.toString();
       } else {
+        talker.debug('SimklService.syncIds: No imdbId or tmdbId found on item: ${item.title}');
         return {};
       }
+
+      talker.debug('SimklService.syncIds: Querying Simkl for ${item.title} with params: $queryParams');
 
       final response = await _dio.get<List<dynamic>>(
         'https://api.simkl.com/search/id',
         queryParameters: queryParams,
       );
 
+      talker.debug('SimklService.syncIds: Response code: ${response.statusCode}, data: ${response.data}');
+
       if (response.statusCode == 200 && response.data != null && response.data!.isNotEmpty) {
         final result = response.data!.first as Map<String, dynamic>;
-        
+        final type = result['type'] as String?;
         final ids = result['ids'] as Map<String, dynamic>?;
-        if (ids != null) {
-          if (ids['simkl'] != null) resolvedIds['simkl'] = ids['simkl'].toString();
-          if (ids['mal'] != null) resolvedIds['mal'] = ids['mal'].toString();
-          if (ids['anilist'] != null) resolvedIds['anilist'] = ids['anilist'].toString();
-          if (ids['tmdb'] != null) resolvedIds['tmdb'] = ids['tmdb'].toString();
-          if (ids['imdb'] != null) resolvedIds['imdb'] = ids['imdb'].toString();
+        
+        if (ids != null && ids['simkl'] != null) {
+          final simklId = ids['simkl'].toString();
+          resolvedIds['simkl'] = simklId;
+          
+          // Determine correct details endpoint path
+          String detailsPath;
+          if (type == 'movie') {
+            detailsPath = 'movies';
+          } else if (type == 'tv') {
+            detailsPath = 'tv';
+          } else if (type == 'anime') {
+            detailsPath = 'anime';
+          } else {
+            detailsPath = item.contentType == MultimediaContentType.movie ? 'movies' : 'tv';
+          }
+          
+          talker.debug('SimklService.syncIds: Fetching full details from /$detailsPath/$simklId');
+          
+          final detailsResponse = await _dio.get<Map<String, dynamic>>(
+            'https://api.simkl.com/$detailsPath/$simklId',
+            queryParameters: {'client_id': _clientId},
+          );
+          
+          if (detailsResponse.statusCode == 200 && detailsResponse.data != null) {
+            final detailsIds = detailsResponse.data!['ids'] as Map<String, dynamic>?;
+            if (detailsIds != null) {
+              if (detailsIds['simkl'] != null) resolvedIds['simkl'] = detailsIds['simkl'].toString();
+              if (detailsIds['mal'] != null) resolvedIds['mal'] = detailsIds['mal'].toString();
+              if (detailsIds['anilist'] != null) resolvedIds['anilist'] = detailsIds['anilist'].toString();
+              if (detailsIds['tmdb'] != null) resolvedIds['tmdb'] = detailsIds['tmdb'].toString();
+              if (detailsIds['imdb'] != null) resolvedIds['imdb'] = detailsIds['imdb'].toString();
+            }
+          }
         }
+        talker.debug('SimklService.syncIds: Resolved ids: $resolvedIds');
+      } else {
+        talker.debug('SimklService.syncIds: Empty or non-200 response.');
       }
-    } catch (e) {
-      // Ignore
+    } catch (e, st) {
+      talker.error('SimklService.syncIds error for item: ${item.title}', e, st);
     }
     
     return resolvedIds;

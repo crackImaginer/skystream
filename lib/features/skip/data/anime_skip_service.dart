@@ -79,7 +79,7 @@ class AnimeSkipService implements SkipService {
       }
 
       final episodes = episodeData['findEpisodesByShowId'] as List;
-      if (kDebugMode) debugPrint('AnimeSkip Episodes: $episodes');
+      if (kDebugMode) debugPrint('AnimeSkip: Found ${episodes.length} episodes');
       final targetEpisode = episodes.firstWhere(
         (dynamic ep) => ep['number'] == episode || ep['number'].toString() == episode.toString(),
         orElse: () => null,

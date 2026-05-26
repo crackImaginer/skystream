@@ -32,6 +32,8 @@ import '../../../../core/services/local_proxy_service.dart';
 import '../../../../core/utils/stream_quality_sorter.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
+import '../../skip/data/skip_service.dart';
+import '../../tracking/data/simkl_service.dart';
 
 // Sentinel so copyWith can distinguish "not passed" from "explicitly null".
 const Object _keep = Object();
@@ -187,6 +189,7 @@ class PlayerState {
   final int? resumePromptPosition;
   final double? resumePromptPercentage;
   final bool userSkippedOverlay;
+  final List<SkipSegment> skipSegments;
 
   const PlayerState({
     this.errorMessage,
@@ -219,6 +222,7 @@ class PlayerState {
     this.resumePromptPosition,
     this.resumePromptPercentage,
     this.userSkippedOverlay = false,
+    this.skipSegments = const [],
   });
 
   // Derived from uiPhase — no separate field needed.
@@ -269,6 +273,7 @@ class PlayerState {
     Object? resumePromptPosition = _keep,
     Object? resumePromptPercentage = _keep,
     bool? userSkippedOverlay,
+    List<SkipSegment>? skipSegments,
   }) {
     return PlayerState(
       errorMessage: errorMessage ?? this.errorMessage,
@@ -308,6 +313,7 @@ class PlayerState {
           ? this.resumePromptPercentage
           : resumePromptPercentage as double?,
       userSkippedOverlay: userSkippedOverlay ?? this.userSkippedOverlay,
+      skipSegments: skipSegments ?? this.skipSegments,
     );
   }
 }
@@ -775,11 +781,33 @@ class PlayerController extends Notifier<PlayerState> {
 
   Future<void> _fetchAndLogSkipSegments() async {
     if (_episode == null) return;
+    if (state.isLive || _item.contentType == MultimediaContentType.livestream) {
+      if (kDebugMode) {
+        debugPrint('Skip Segments: Bypassed lookup (livestreams are not supported)');
+      }
+      return;
+    }
+
+    final hasNoIds = state.tmdbId == null &&
+        state.imdbId == null &&
+        _item.syncData?['anilistId'] == null &&
+        _item.syncData?['anilist_id'] == null;
+
+    if (hasNoIds) {
+      if (kDebugMode) {
+        debugPrint('Skip Segments: Bypassed lookup (no TMDB/IMDB/AniList IDs available)');
+      }
+      return;
+    }
+
     if (kDebugMode) {
       debugPrint('=============================================');
       debugPrint('SKIP SEGMENTS (IntroDB/AnimeSkip)');
     }
 
+    final List<SkipSegment> allSegments = [];
+
+    // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
     try {
       final introDb = ref.read(introDbServiceProvider);
       final segments = await introDb.getSkipSegments(
@@ -788,37 +816,84 @@ class PlayerController extends Notifier<PlayerState> {
         season: _episode!.season,
         episode: _episode!.episode,
       );
-      if (kDebugMode) {
-        debugPrint('IntroDB returned ${segments.length} segments:');
-        for (final s in segments) {
-          debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('IntroDB error: $e');
-    }
-
-    try {
-      final anilistId =
-          _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id'];
-      if (anilistId != null) {
-        final animeSkip = ref.read(animeSkipServiceProvider);
-        final segments = await animeSkip.getSkipSegments(
-          anilistId: int.tryParse(anilistId.toString()),
-          season: _episode!.season,
-          episode: _episode!.episode,
-        );
+      if (_isDisposed) return;
+      if (segments.isNotEmpty) {
+        allSegments.addAll(segments);
         if (kDebugMode) {
-          debugPrint('AnimeSkip returned ${segments.length} segments:');
+          debugPrint('IntroDB returned ${segments.length} segments:');
           for (final s in segments) {
             debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
           }
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('AnimeSkip error: $e');
+      if (kDebugMode) debugPrint('IntroDB error: $e');
+    }
+
+    if (_isDisposed) return;
+
+    // 2. Check if the media is anime or animated to run AnimeSkip logic
+    final isAnime = _item.contentType == MultimediaContentType.anime ||
+        (_item.provider != null && _item.provider!.toLowerCase().contains('anime')) ||
+        _item.url.contains('animepahe') ||
+        _item.syncData?['anilistId'] != null ||
+        _item.syncData?['anilist_id'] != null ||
+        (_item.tags != null && _item.tags!.any((t) => t.toLowerCase() == 'anime' || t.toLowerCase() == 'animation'));
+
+    if (isAnime) {
+      try {
+        var anilistId =
+            _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id'];
+
+        if (anilistId == null) {
+          final simkl = ref.read(simklServiceProvider);
+          final resolved = await simkl.syncIds(_item);
+          if (_isDisposed) return;
+          if (kDebugMode) {
+            debugPrint('AnimeSkip: Resolved IDs from Simkl: $resolved');
+          }
+          anilistId = resolved['anilist'];
+        }
+
+        if (_isDisposed) return;
+
+        if (anilistId != null) {
+          final animeSkip = ref.read(animeSkipServiceProvider);
+          final segments = await animeSkip.getSkipSegments(
+            anilistId: int.tryParse(anilistId.toString()),
+            season: _episode!.season,
+            episode: _episode!.episode,
+          );
+          if (_isDisposed) return;
+          if (segments.isNotEmpty) {
+            allSegments.addAll(segments);
+            if (kDebugMode) {
+              debugPrint('AnimeSkip returned ${segments.length} segments:');
+              for (final s in segments) {
+                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('AnimeSkip error: $e');
+      }
+    } else {
+      if (kDebugMode) {
+        debugPrint('AnimeSkip: Bypassed lookup (media type is not anime/animated)');
+      }
     }
     if (kDebugMode) debugPrint('=============================================');
+
+    if (allSegments.isNotEmpty && !_isDisposed) {
+      // Sort segments by start time
+      allSegments.sort((a, b) => a.startTime.compareTo(b.startTime));
+      
+      // Merge overlapping segments if needed, or simply assign them.
+      // Usually, IntroDB is highly accurate but AnimeSkip provides more detailed segments.
+      // For now, we'll store all of them, but UI might prioritize or filter duplicates.
+      state = state.copyWith(skipSegments: allSegments);
+    }
   }
 
   void _setupVideoViewListeners() {
