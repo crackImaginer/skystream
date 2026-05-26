@@ -1,13 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+// Pulled in for LogicalKeyboardKey / KeyDownEvent in the Focus key handler;
+// `material.dart` does not re-export these (despite an earlier IDE hint).
+import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
+import 'player_prompt_placement.dart';
 
 class ResumePromptOverlay extends StatelessWidget {
   final int? positionMs;
   final double? percentage;
   final VoidCallback onResume;
   final VoidCallback onStartOver;
+  final bool isTv;
 
   const ResumePromptOverlay({
     super.key,
@@ -15,6 +20,7 @@ class ResumePromptOverlay extends StatelessWidget {
     this.percentage,
     required this.onResume,
     required this.onStartOver,
+    this.isTv = false,
   });
 
   String _formatDuration(int ms) {
@@ -37,14 +43,14 @@ class ResumePromptOverlay extends StatelessWidget {
     } else if (percentage != null && percentage! > 0) {
       subtitle = "Synced progress: ${percentage!.toStringAsFixed(0)}%";
     }
-    
-    return _CountdownButtonPlacement(
+    return PlayerPromptPlacement(
       child: CountdownFillButton(
         label: l10n.resumeNow,
         subtitle: subtitle,
         duration: const Duration(seconds: 8),
         onPressed: onResume,
         onTimeout: onStartOver,
+        isTv: isTv,
       ),
     );
   }
@@ -58,6 +64,7 @@ class CountdownFillButton extends StatefulWidget {
   final VoidCallback onTimeout;
   final bool showDismiss;
   final VoidCallback? onDismiss;
+  final bool isTv;
 
   const CountdownFillButton({
     super.key,
@@ -68,6 +75,7 @@ class CountdownFillButton extends StatefulWidget {
     required this.onTimeout,
     this.showDismiss = false,
     this.onDismiss,
+    this.isTv = false,
   });
 
   @override
@@ -79,6 +87,7 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
   late final AnimationController _controller;
   Timer? _timer;
   bool _completed = false;
+  final FocusNode _focusNode = FocusNode(debugLabel: 'countdown_fill_button');
 
   @override
   void initState() {
@@ -86,12 +95,23 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
     _controller = AnimationController(vsync: this, duration: widget.duration)
       ..forward();
     _timer = Timer(widget.duration, _handleTimeout);
+    // On TV, grab focus on appear so D-pad Select/Enter activates the
+    // primary action immediately. Without this, the 8-second resume
+    // countdown can elapse before the user even reaches the button.
+    if (widget.isTv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _focusNode.canRequestFocus) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -125,20 +145,67 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
         : (isCompact ? 58.0 : 64.0);
     final borderRadius = BorderRadius.circular(isCompact ? 8 : 10);
 
-    return SizedBox(
-      width: buttonWidth,
-      height: buttonHeight,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.52),
-                borderRadius: borderRadius,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-              ),
-            ),
-          ),
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.select ||
+            key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.space) {
+          _handlePressed();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.escape ||
+            key == LogicalKeyboardKey.goBack) {
+          if (widget.onDismiss != null) {
+            _handleDismiss();
+          } else {
+            // No explicit dismiss — fire the timeout path early so the
+            // overlay tears itself down instead of trapping focus.
+            _handleTimeout();
+          }
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Builder(
+        builder: (context) {
+          final isFocused = Focus.of(context).hasFocus;
+          return AnimatedScale(
+            scale: isFocused && widget.isTv ? 1.04 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: SizedBox(
+              width: buttonWidth,
+              height: buttonHeight,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.52),
+                        borderRadius: borderRadius,
+                        boxShadow: isFocused && widget.isTv
+                            ? [
+                                BoxShadow(
+                                  color: HotstarPlayerStyle.accent.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                  blurRadius: 16,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                        border: Border.all(
+                          color: isFocused && widget.isTv
+                              ? HotstarPlayerStyle.accent
+                              : Colors.white.withValues(alpha: 0.22),
+                          width: isFocused && widget.isTv ? 2 : 1,
+                        ),
+                      ),
+                    ),
+                  ),
           Positioned.fill(
             child: ClipRRect(
               borderRadius: borderRadius,
@@ -232,28 +299,11 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
             ),
           ),
         ],
+              ),
+            ),
+          );
+        },
       ),
-    );
-  }
-}
-
-class _CountdownButtonPlacement extends StatelessWidget {
-  final Widget child;
-
-  const _CountdownButtonPlacement({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final padding = MediaQuery.viewPaddingOf(context);
-    final isCompact = size.shortestSide < 600;
-    final bottomOffset = isCompact ? 108.0 : 116.0;
-    final sideOffset = isCompact ? 18.0 : 24.0;
-
-    return Positioned(
-      right: sideOffset + padding.right,
-      bottom: bottomOffset + padding.bottom,
-      child: child,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../player_controller.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
+import '../../../settings/presentation/player_settings_provider.dart';
 import 'hotstar_player_style.dart';
 import '../../../skip/data/skip_service.dart';
 
@@ -29,6 +30,7 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
 
 class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
   double? _dragValue;
+  static const double _sliderTrackInset = 24;
 
   // ValueNotifiers so position/duration updates don't setState the whole widget.
   final _vvPositionNotifier = ValueNotifier<int>(0);
@@ -39,6 +41,27 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     super.initState();
     widget.videoViewController?.position.addListener(_onVvPosition);
     widget.videoViewController?.mediaInfo.addListener(_onVvMediaInfo);
+    _syncVideoViewProgress();
+    // Drop any stale scrub-drag value when the active stream changes
+    // (source switch, episode change, quality change). Otherwise the
+    // thumb stays pinned to the previous drag position until the user
+    // touches it again — confusing in particular when switching to a
+    // shorter source where the drag value is now beyond duration.
+    _watchStreamChanges();
+  }
+
+  void _watchStreamChanges() {
+    // `currentStreamIndex` ticks every time the active source changes
+    // (source picker, quality switch, episode autoplay). Cheap int
+    // comparison; no allocations.
+    ref.listenManual<int>(
+      playerControllerProvider.select((s) => s.currentStreamIndex),
+      (prev, next) {
+        if (prev != null && prev != next && _dragValue != null && mounted) {
+          setState(() => _dragValue = null);
+        }
+      },
+    );
   }
 
   @override
@@ -49,7 +72,13 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
       old.videoViewController?.mediaInfo.removeListener(_onVvMediaInfo);
       widget.videoViewController?.position.addListener(_onVvPosition);
       widget.videoViewController?.mediaInfo.addListener(_onVvMediaInfo);
+      _syncVideoViewProgress();
     }
+  }
+
+  void _syncVideoViewProgress() {
+    _onVvPosition();
+    _onVvMediaInfo();
   }
 
   void _onVvPosition() {
@@ -76,15 +105,108 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     final minutes = absDuration.inMinutes.remainder(60);
     final seconds = absDuration.inSeconds.remainder(60);
     if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   String _formatRemaining(Duration duration, Duration position) {
     final remaining = duration - position;
     final clamped = remaining.isNegative ? Duration.zero : remaining;
     return '-${_formatDuration(clamped)}';
+  }
+
+  Widget _buildTimeHeader({
+    required bool isLive,
+    required Duration duration,
+    required Duration displayDuration,
+  }) {
+    if (isLive) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _sliderTrackInset),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            height: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.45),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, color: Colors.red, size: 7),
+                SizedBox(width: 5),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final currentText = _formatDuration(displayDuration);
+    final remainingText = _formatRemaining(duration, displayDuration);
+    final durationText = _formatDuration(duration);
+    // Persisted across sessions — once a user toggles to remaining-time
+    // they almost always want it always. Stored in PlayerSettings so it
+    // survives episode change, source change, and app restart.
+    final showRemaining =
+        ref.watch(
+          playerSettingsProvider.select(
+            (s) => s.asData?.value.showRemainingTime,
+          ),
+        ) ??
+        false;
+    final label = showRemaining
+        ? '$remainingText / $durationText'
+        : '$currentText / $durationText';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _sliderTrackInset),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              ref
+                  .read(playerSettingsProvider.notifier)
+                  .setShowRemainingTime(!showRemaining);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: const TextStyle(
+                  color: HotstarPlayerStyle.primaryText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -223,185 +345,167 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     bool isLive = false,
   }) {
     final isDragging = _dragValue != null;
-    final remainingText = isLive
-        ? ''
-        : _formatRemaining(duration, displayDuration);
     return SizedBox(
-      height: 48,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(width: 18),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const tooltipWidth = 76.0;
-                final scrubPercent = durationMs > 0
-                    ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
-                    : 0.0;
-                final maxTooltipLeft = constraints.maxWidth > tooltipWidth
-                    ? constraints.maxWidth - tooltipWidth
-                    : 0.0;
-                final tooltipLeft =
-                    (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
-                        .clamp(0.0, maxTooltipLeft)
-                        .toDouble();
+      height: 58,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTimeHeader(
+              isLive: isLive,
+              duration: duration,
+              displayDuration: displayDuration,
+            ),
+            SizedBox(
+              height: 34,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const tooltipWidth = 76.0;
+                  final scrubPercent = durationMs > 0
+                      ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
+                      : 0.0;
+                  final maxTooltipLeft = constraints.maxWidth > tooltipWidth
+                      ? constraints.maxWidth - tooltipWidth
+                      : 0.0;
+                  final tooltipLeft =
+                      (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
+                          .clamp(0.0, maxTooltipLeft)
+                          .toDouble();
 
-                return Stack(
-                  alignment: Alignment.center,
-                  clipBehavior: Clip.none,
-                  children: [
-                    ?bufferWidget,
-                    if (durationMs > 0 && skipSegments.isNotEmpty)
-                      ...skipSegments.map((seg) {
-                        final leftPercent = (seg.startTime * 1000 / durationMs)
-                            .clamp(0.0, 1.0);
-                        final rightPercent = (seg.endTime * 1000 / durationMs)
-                            .clamp(0.0, 1.0);
-                        if (leftPercent >= rightPercent) {
-                          return const SizedBox.shrink();
-                        }
+                  return Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      ?bufferWidget,
+                      if (durationMs > 0 && skipSegments.isNotEmpty)
+                        ...skipSegments.map((seg) {
+                          final leftPercent =
+                              (seg.startTime * 1000 / durationMs).clamp(
+                                0.0,
+                                1.0,
+                              );
+                          final rightPercent = (seg.endTime * 1000 / durationMs)
+                              .clamp(0.0, 1.0);
+                          if (leftPercent >= rightPercent) {
+                            return const SizedBox.shrink();
+                          }
 
-                        return Positioned(
-                          left: constraints.maxWidth * leftPercent,
-                          width:
-                              constraints.maxWidth *
-                              (rightPercent - leftPercent),
-                          height: 2.5,
-                          child: ColoredBox(
-                            color: HotstarPlayerStyle.accent.withValues(
-                              alpha: 0.8,
+                          return Positioned(
+                            left: constraints.maxWidth * leftPercent,
+                            width:
+                                constraints.maxWidth *
+                                (rightPercent - leftPercent),
+                            height: 2.5,
+                            child: ColoredBox(
+                              color: HotstarPlayerStyle.accent.withValues(
+                                alpha: 0.8,
+                              ),
                             ),
+                          );
+                        }),
+                      SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: 2.5,
+                          thumbShape: RoundSliderThumbShape(
+                            enabledThumbRadius: canSeek
+                                ? (isDragging ? 8 : 6)
+                                // Hide the thumb entirely when the stream
+                                // isn't seekable (live) — a visible thumb
+                                // that doesn't respond to drag is the worst
+                                // UX, users tap it and assume the player is
+                                // broken.
+                                : 0,
                           ),
-                        );
-                      }),
-                    SliderTheme(
-                      data: SliderThemeData(
-                        trackHeight: 2.5,
-                        thumbShape: RoundSliderThumbShape(
-                          enabledThumbRadius: isDragging ? 8 : 6,
+                          overlayShape: RoundSliderOverlayShape(
+                            overlayRadius: canSeek
+                                ? (isDragging ? 16 : 10)
+                                : 0,
+                          ),
+                          activeTrackColor: canSeek
+                              ? HotstarPlayerStyle.accent
+                              : HotstarPlayerStyle.accent.withValues(
+                                  alpha: 0.5,
+                                ),
+                          inactiveTrackColor: HotstarPlayerStyle.trackInactive,
+                          disabledActiveTrackColor: HotstarPlayerStyle.accent
+                              .withValues(alpha: 0.5),
+                          disabledInactiveTrackColor:
+                              HotstarPlayerStyle.trackInactive,
+                          disabledThumbColor: Colors.transparent,
+                          trackShape: const RoundedRectSliderTrackShape(),
+                          thumbColor: Colors.white,
+                          overlayColor: HotstarPlayerStyle.accent.withValues(
+                            alpha: 0.18,
+                          ),
                         ),
-                        overlayShape: RoundSliderOverlayShape(
-                          overlayRadius: isDragging ? 16 : 10,
-                        ),
-                        activeTrackColor: HotstarPlayerStyle.accent,
-                        inactiveTrackColor: HotstarPlayerStyle.trackInactive,
-                        trackShape: const RoundedRectSliderTrackShape(),
-                        thumbColor: Colors.white,
-                        overlayColor: HotstarPlayerStyle.accent.withValues(
-                          alpha: 0.18,
+                        child: CustomSlider(
+                          value: displayValue.clamp(
+                            0,
+                            durationMs > 0 ? durationMs : 1.0,
+                          ),
+                          min: 0.0,
+                          max: durationMs > 0 ? durationMs : 1.0,
+                          step: 5000,
+                          onChanged: canSeek
+                              ? (val) => setState(() => _dragValue = val)
+                              : null,
+                          onChangeStart: canSeek
+                              ? (val) {
+                                  widget.onSeekStart?.call();
+                                  setState(() => _dragValue = val);
+                                }
+                              : null,
+                          onChangeEnd: canSeek
+                              ? (val) {
+                                  onSeekEnd(val);
+                                  widget.onSeekEnd?.call();
+                                  setState(() => _dragValue = null);
+                                }
+                              : null,
                         ),
                       ),
-                      child: CustomSlider(
-                        value: displayValue.clamp(
-                          0,
-                          durationMs > 0 ? durationMs : 1.0,
-                        ),
-                        min: 0.0,
-                        max: durationMs > 0 ? durationMs : 1.0,
-                        step: 5000,
-                        onChanged: canSeek
-                            ? (val) => setState(() => _dragValue = val)
-                            : null,
-                        onChangeStart: canSeek
-                            ? (val) {
-                                widget.onSeekStart?.call();
-                                setState(() => _dragValue = val);
-                              }
-                            : null,
-                        onChangeEnd: canSeek
-                            ? (val) {
-                                onSeekEnd(val);
-                                widget.onSeekEnd?.call();
-                                setState(() => _dragValue = null);
-                              }
-                            : null,
-                      ),
-                    ),
-                    if (isDragging)
-                      Positioned(
-                        left: tooltipLeft,
-                        bottom: 42,
-                        child: IgnorePointer(
-                          child: SizedBox(
-                            width: tooltipWidth,
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.82),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _formatDuration(displayDuration),
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    fontFeatures: [
-                                      FontFeature.tabularFigures(),
-                                    ],
+                      if (isDragging)
+                        Positioned(
+                          left: tooltipLeft,
+                          bottom: 34,
+                          child: IgnorePointer(
+                            child: SizedBox(
+                              width: tooltipWidth,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.82),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _formatDuration(displayDuration),
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 18),
-          if (isLive)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 50 / 255),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: Colors.red.withValues(alpha: 120 / 255),
-                  width: 1,
-                ),
-              ),
-              child: const Text(
-                "🔴  LIVE",
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            )
-          else
-            SizedBox(
-              width: 86,
-              height: 24,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  remainingText,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.clip,
-                  style: const TextStyle(
-                    color: HotstarPlayerStyle.primaryText,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                  textAlign: TextAlign.left,
-                ),
+                    ],
+                  );
+                },
               ),
             ),
-          const SizedBox(width: 12),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -467,7 +571,11 @@ class PlayerPlayPauseButton extends StatelessWidget {
 
   Widget _buildButton({required bool isPlaying, required bool isSpinning}) {
     return CustomButton(
-      autofocus: true,
+      // No `autofocus: true` here. The parent (SkyStreamPlayerControlsState)
+      // owns the focus story — on TV it calls `_playFocusNode.requestFocus()`
+      // explicitly from initState / showControls. Setting autofocus here
+      // additionally stole focus on phone + desktop every time the player
+      // opened, even when the user was interacting with something else.
       focusNode: focusNode,
       onPressed: onPressed ?? () => player.playOrPause(),
       shape: const CircleBorder(),

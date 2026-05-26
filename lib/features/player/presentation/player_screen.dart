@@ -44,7 +44,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   _videoViewController; // video_view (ExoPlayer/AVPlayer)
 
   final ValueNotifier<BoxFit> _videoFit = ValueNotifier(BoxFit.contain);
-  final ValueNotifier<bool> _controlsVisible = ValueNotifier(true);
+  // Mirrors SkyStreamPlayerControlsState._isVisible, fed by its
+  // onVisibilityChanged callback. Starts false to match the child's
+  // initial state; the child will push true once it decides controls
+  // should be visible (immediately on TV; on duration-load elsewhere).
+  // Used here for subtitle Y-offset computation and the TV back-to-hide
+  // intercept in PopScope.
+  final ValueNotifier<bool> _controlsVisible = ValueNotifier(false);
 
   final GlobalKey<SkyStreamPlayerControlsState> _controlsKeyFinal = GlobalKey();
 
@@ -141,6 +147,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           : _player.state.playing;
       _playerController.saveProgress();
       _playerController.pause();
+
+      // Tear down any in-flight space-hold speed boost. If the user is
+      // holding space (2× speed) and the OS backgrounds the app, the
+      // KeyUp event is lost — leaving the state machine stuck with
+      // _spaceHeldForSpeed=true forever. Subsequent space taps would
+      // see the wrong branch. Reset speed back to whatever the user had
+      // before the hold so we resume at the right rate.
+      _spaceHoldTimer?.cancel();
+      _spaceHoldTimer = null;
+      if (_spaceHeldForSpeed) {
+        final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
+        _spaceHeldForSpeed = false;
+        _speedBeforeSpaceHold = null;
+        unawaited(_playerController.setPlaybackSpeed(previousSpeed));
+      }
     } else if (state == AppLifecycleState.resumed) {
       // Only re-acquire wakelock if we were actually playing — leaving it
       // enabled while paused drains battery for no reason (audit H4).
@@ -286,24 +307,29 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.mediaPlayPause) {
       _controlsKeyFinal.currentState?.togglePlayPause();
-      if (!_controlsVisible.value) {
-        _controlsKeyFinal.currentState?.showControls();
-      }
+      // Always treat as user interaction so the hide-idle timer resets.
+      // `onUserInteraction` shows the controls if they're hidden and
+      // restarts the 3 s hide countdown — so spamming play/pause from
+      // the remote doesn't let controls vanish mid-press.
+      _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
 
     if (event.logicalKey == LogicalKeyboardKey.keyM) {
       _controlsKeyFinal.currentState?.toggleMute();
+      _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
 
     if (event.logicalKey == LogicalKeyboardKey.keyZ) {
       _controlsKeyFinal.currentState?.cycleResize();
+      _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
 
     if (event.logicalKey == LogicalKeyboardKey.keyF) {
       _controlsKeyFinal.currentState?.toggleFullscreen();
+      _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
 
@@ -320,6 +346,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
 
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       _controlsKeyFinal.currentState?.triggerSeek(true);
+      // triggerSeek internally calls _seekRelative which restarts the
+      // hide-timer — no extra onUserInteraction call needed.
       return KeyEventResult.handled;
     }
 

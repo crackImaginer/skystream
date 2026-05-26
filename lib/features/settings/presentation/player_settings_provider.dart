@@ -41,6 +41,12 @@ class PlayerSettings {
   /// Quality to prefer when on mobile data. Default: 1080p.
   final QualityPreference mobileQuality;
 
+  /// When true, the progress-bar time header shows the remaining time
+  /// (e.g. "-1:23:45 / 2:00:00") instead of the elapsed time. Sticky
+  /// across sessions because users who prefer one view almost always
+  /// want it always.
+  final bool showRemainingTime;
+
   // Subtitle Accounts
   final String osUsername;
   final String osPassword;
@@ -67,6 +73,7 @@ class PlayerSettings {
     this.subtitlePosition = 100.0,
     this.wifiQuality = QualityPreference.q4k,
     this.mobileQuality = QualityPreference.q1080,
+    this.showRemainingTime = false,
     this.osUsername = '',
     this.osPassword = '',
     this.osApiKey = '',
@@ -94,6 +101,7 @@ class PlayerSettings {
     double? subtitlePosition,
     QualityPreference? wifiQuality,
     QualityPreference? mobileQuality,
+    bool? showRemainingTime,
     String? osUsername,
     String? osPassword,
     String? osApiKey,
@@ -123,6 +131,7 @@ class PlayerSettings {
       subtitlePosition: subtitlePosition ?? this.subtitlePosition,
       wifiQuality: wifiQuality ?? this.wifiQuality,
       mobileQuality: mobileQuality ?? this.mobileQuality,
+      showRemainingTime: showRemainingTime ?? this.showRemainingTime,
       osUsername: osUsername ?? this.osUsername,
       osPassword: osPassword ?? this.osPassword,
       osApiKey: osApiKey ?? this.osApiKey,
@@ -211,6 +220,12 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       storage.getPlayerSetting<String>('player_mobile_quality'),
       QualityPreference.q1080,
     );
+    final showRemaining =
+        storage.getPlayerSetting<bool>(
+          'player_show_remaining',
+          defaultValue: false,
+        ) ??
+        false;
     final osUser = storage.getPlayerSetting<String>('player_os_user') ?? '';
     final osPass = storage.getPlayerSetting<String>('player_os_pass') ?? '';
     final osKey = storage.getPlayerSetting<String>('player_os_key') ?? '';
@@ -237,6 +252,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       subtitlePosition: subPos,
       wifiQuality: wifiQ,
       mobileQuality: mobileQ,
+      showRemainingTime: showRemaining,
       osUsername: osUser,
       osPassword: osPass,
       osApiKey: osKey,
@@ -361,6 +377,11 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setMobileQuality(QualityPreference q) async {
     await _repository.setPlayerSetting('player_mobile_quality', q.name);
     state = AsyncData(state.requireValue.copyWith(mobileQuality: q));
+  }
+
+  Future<void> setShowRemainingTime(bool val) async {
+    await _repository.setPlayerSetting('player_show_remaining', val);
+    state = AsyncData(state.requireValue.copyWith(showRemainingTime: val));
   }
 
   Future<void> setOpenSubtitlesCredentials(

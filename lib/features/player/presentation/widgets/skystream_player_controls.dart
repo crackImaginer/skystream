@@ -111,6 +111,13 @@ class SkyStreamPlayerControlsState
   Duration _animDuration = HotstarPlayerStyle.controlFadeDuration;
   bool _isFullscreen = false;
   late final FocusNode _playFocusNode;
+  // Anchor for the first button in the bottom actions row. Used to bounce
+  // focus from the center play button (D-pad Down) into the actions row
+  // and to send focus back up (D-pad Up) — gives a real two-level
+  // vertical focus hierarchy on TV (H-DPAD-3).
+  final FocusNode _firstActionFocusNode = FocusNode(
+    debugLabel: 'first_action_button',
+  );
 
   @override
   void initState() {
@@ -218,6 +225,11 @@ class SkyStreamPlayerControlsState
           setState(() {
             _isVisible = true;
           });
+          // Notify parent so subtitle-position math and any other
+          // parent-side visibility readers stay in sync. Previously the
+          // parent's _controlsVisible notifier could diverge from this
+          // local _isVisible until the first hide-timer fired.
+          widget.onVisibilityChanged?.call(true);
           _startHideTimer();
         }
       }),
@@ -271,6 +283,20 @@ class SkyStreamPlayerControlsState
     if (widget.streams != null && widget.streams!.isNotEmpty) {
       _isVisible = true;
     }
+    // On TV, controls should be visible + focused on the play button as
+    // soon as the player opens. Otherwise the user has to nudge ↑/↓ on
+    // the remote first before the center button responds to select —
+    // which is jarring on launch and breaks "press OK to start playing"
+    // expectations (B-DPAD-1).
+    if (_isTv) {
+      _isVisible = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onVisibilityChanged?.call(true);
+          _playFocusNode.requestFocus();
+        }
+      });
+    }
     _startHideTimer();
     FocusManager.instance.addListener(_onFocusChange);
 
@@ -311,6 +337,7 @@ class SkyStreamPlayerControlsState
     FocusManager.instance.removeListener(_onFocusChange);
     _playFocusNode.dispose();
     _backFocusNode.dispose();
+    _firstActionFocusNode.dispose();
     _hideTimer?.cancel();
     _seekAnimController.dispose();
     for (final s in _subscriptions) {
@@ -474,6 +501,9 @@ class SkyStreamPlayerControlsState
 
   void _startHideTimer() {
     _hideTimer?.cancel();
+    // No point arming the timer if controls are already hidden — the timer's
+    // body would no-op the setState anyway.
+    if (!_isVisible) return;
     _hideTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _isPlaying) {
         setState(() {
@@ -494,13 +524,13 @@ class SkyStreamPlayerControlsState
     }
   }
 
+  /// Pure timer cancel. Previously this also force-showed the controls when
+  /// they were hidden, which caused them to pop back up unexpectedly on every
+  /// pause / buffer / stall / network blip (anywhere the playing-state flips
+  /// to false). Cancelling the hide-timer and showing the controls are two
+  /// separate concerns — keep them separate.
   void _cancelHideTimer() {
     _hideTimer?.cancel();
-    if (!_isVisible) {
-      setState(() => _isVisible = true);
-      widget.onVisibilityChanged?.call(true);
-      if (_isTv) _playFocusNode.requestFocus();
-    }
   }
 
   // --- video_view bridge listeners ---
@@ -533,6 +563,7 @@ class SkyStreamPlayerControlsState
         oldDuration == Duration.zero &&
         newDuration != Duration.zero) {
       setState(() => _isVisible = true);
+      widget.onVisibilityChanged?.call(true);
       _startHideTimer();
     }
 
@@ -889,7 +920,8 @@ class SkyStreamPlayerControlsState
                 ),
 
                 // Resume Prompt Button
-                if (resumePromptPosition != null || resumePromptPercentage != null)
+                if (resumePromptPosition != null ||
+                    resumePromptPercentage != null)
                   ResumePromptOverlay(
                     positionMs: resumePromptPosition,
                     percentage: resumePromptPercentage,
@@ -899,6 +931,7 @@ class SkyStreamPlayerControlsState
                     onStartOver: () => ref
                         .read(playerControllerProvider.notifier)
                         .dismissResumePrompt(),
+                    isTv: _isTv,
                   ),
 
                 // Next Episode Button (Persistent when triggered)
@@ -914,6 +947,7 @@ class SkyStreamPlayerControlsState
                     onDismiss: () => ref
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
+                    isTv: _isTv,
                   ),
 
                 // Skip Segment Overlay (Skip Intro / Skip Recap / Skip Outro)
@@ -1000,6 +1034,7 @@ class SkyStreamPlayerControlsState
     required VoidCallback onTap,
     bool rotate = false,
     bool highlight = false,
+    FocusNode? focusNode,
   }) {
     return PlayerActionButton(
       icon: icon,
@@ -1007,6 +1042,7 @@ class SkyStreamPlayerControlsState
       onTap: onTap,
       highlight: highlight,
       isTv: _isTv,
+      focusNode: focusNode,
     );
   }
 
@@ -1111,23 +1147,20 @@ class SkyStreamPlayerControlsState
                     onTap: _enterPip,
                   ),
                 _buildTopUtilityButton(
-                  icon:
-                      Platform.isMacOS || Platform.isWindows || Platform.isLinux
-                      ? (_isFullscreen
-                            ? Icons.fullscreen_exit
-                            : Icons.fullscreen)
-                      : Icons.aspect_ratio,
-                  tooltip:
-                      Platform.isMacOS || Platform.isWindows || Platform.isLinux
-                      ? (_isFullscreen
-                            ? AppLocalizations.of(context)!.windowed
-                            : AppLocalizations.of(context)!.fullscreen)
-                      : AppLocalizations.of(context)!.resize,
-                  onTap:
-                      Platform.isMacOS || Platform.isWindows || Platform.isLinux
-                      ? toggleFullscreen
-                      : cycleResize,
+                  icon: Icons.aspect_ratio,
+                  tooltip: AppLocalizations.of(context)!.resize,
+                  onTap: cycleResize,
                 ),
+                if (Platform.isMacOS || Platform.isWindows || Platform.isLinux)
+                  _buildTopUtilityButton(
+                    icon: _isFullscreen
+                        ? Icons.fullscreen_exit
+                        : Icons.fullscreen,
+                    tooltip: _isFullscreen
+                        ? AppLocalizations.of(context)!.windowed
+                        : AppLocalizations.of(context)!.fullscreen,
+                    onTap: toggleFullscreen,
+                  ),
               ],
             ),
 
@@ -1142,16 +1175,35 @@ class SkyStreamPlayerControlsState
                 ),
               ),
 
-            // Playback controls - Extracted to component
-            PlayerCenterControls(
-              player: widget.player,
-              videoViewController: widget.videoViewController,
-              isLoading: widget.isLoading,
-              isTv: _isTv,
-              playFocusNode: _playFocusNode,
-              onSeekBackward: () => _seekRelative(const Duration(seconds: -10)),
-              onSeekForward: () => _seekRelative(const Duration(seconds: 10)),
-              onPlayPause: _togglePlay,
+            // Playback controls — wrapped in a Focus that intercepts D-pad
+            // Down to jump into the bottom actions row. The seek
+            // back/play/forward triplet doesn't have anything below it
+            // visually, so directional traversal would otherwise stop dead
+            // here. `skipTraversal: true` keeps this wrapper out of the
+            // tab order itself (H-DPAD-3).
+            Focus(
+              skipTraversal: true,
+              onKeyEvent: (node, event) {
+                if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+                    _firstActionFocusNode.canRequestFocus) {
+                  _firstActionFocusNode.requestFocus();
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: PlayerCenterControls(
+                player: widget.player,
+                videoViewController: widget.videoViewController,
+                isLoading: widget.isLoading,
+                isTv: _isTv,
+                playFocusNode: _playFocusNode,
+                onSeekBackward: () =>
+                    _seekRelative(const Duration(seconds: -10)),
+                onSeekForward: () =>
+                    _seekRelative(const Duration(seconds: 10)),
+                onPlayPause: _togglePlay,
+              ),
             ),
 
             // Bottom overlay (slider, actions)
@@ -1180,8 +1232,25 @@ class SkyStreamPlayerControlsState
                         videoViewController: widget.videoViewController,
                         onSeekStart: _cancelHideTimer,
                       ),
-                      // Actions Row
-                      FocusTraversalGroup(
+                      // Actions Row — wrapped in a Focus that intercepts
+                      // D-pad Up to jump back to the center play button.
+                      // OrderedTraversalPolicy traps left/right cycling
+                      // within the row; without this wrapper, Up has
+                      // nowhere to go (H-DPAD-3).
+                      Focus(
+                        skipTraversal: true,
+                        onKeyEvent: (node, event) {
+                          if (event is! KeyDownEvent) {
+                            return KeyEventResult.ignored;
+                          }
+                          if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                              _playFocusNode.canRequestFocus) {
+                            _playFocusNode.requestFocus();
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: FocusTraversalGroup(
                         policy: OrderedTraversalPolicy(),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
@@ -1210,6 +1279,7 @@ class SkyStreamPlayerControlsState
                                               )!.lock,
                                         onTap: _toggleLock,
                                         highlight: _isLocked,
+                                        focusNode: _firstActionFocusNode,
                                       ),
                                     ),
                                     FocusTraversalOrder(
@@ -1354,6 +1424,7 @@ class SkyStreamPlayerControlsState
                               ),
                             );
                           },
+                        ),
                         ),
                       ),
                     ],

@@ -2842,6 +2842,32 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
+  /// Reset every per-episode state that would otherwise carry across an
+  /// in-place episode swap (no `disposeController()` is called between
+  /// episodes — only `_init` does the full reset). Without this, several
+  /// landmines fire on auto-next or manual episode switch:
+  ///
+  /// - `_hasScrobbleStarted`/`_hasMarkedWatched` carry over → `scrobbleStart`
+  ///   fires under the wrong episode's tracking record, or `markWatched`
+  ///   refuses to fire on the new episode because the previous one was
+  ///   already marked.
+  /// - `_pendingResumeSeekPosition` carries over → the new episode seeks
+  ///   to the *previous* episode's saved offset (potentially past its end).
+  /// - `state.skipSegments` carries over → the old episode's intro/outro
+  ///   skip button briefly flashes on the new episode's opening seconds
+  ///   before the new segments load.
+  /// - The sync manager's resolved-ID cache holds the previous item's IDs.
+  void _resetPerEpisodeState() {
+    _hasScrobbleStarted = false;
+    _hasMarkedWatched = false;
+    _pendingResumeSeekPosition = null;
+    _isApplyingPendingResumeSeek = false;
+    ref.read(syncManagerProvider).clearCache();
+    if (state.skipSegments.isNotEmpty) {
+      state = state.copyWith(skipSegments: const []);
+    }
+  }
+
   Future<void> playNextEpisode() async {
     if (_item.contentType != MultimediaContentType.series) return;
 
@@ -2881,6 +2907,7 @@ class PlayerController extends Notifier<PlayerState> {
       _videoUrl = finalUrl;
       _episode = nextEpisode;
       _userAddedExternalSubtitles.clear();
+      _resetPerEpisodeState();
       state = state.copyWith(
         playerTitle: "${_item.title} - ${nextEpisode.name}",
         showNextEpisodeOverlay: false,
@@ -2930,6 +2957,7 @@ class PlayerController extends Notifier<PlayerState> {
     _suppressNextEpisodeDetection = true;
     _nextEpisodeOverlayDismissedForCurrentEnding = false;
     _userAddedExternalSubtitles.clear();
+    _resetPerEpisodeState();
 
     state = state.copyWith(
       playerTitle: "${_item.title} - ${episode.name}",

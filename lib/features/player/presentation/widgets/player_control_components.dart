@@ -205,6 +205,10 @@ class PlayerActionButton extends StatefulWidget {
   final bool highlight;
   final bool isTv;
   final int focusOrder;
+  /// Optional external focus node. Pass one when the caller needs to
+  /// `.requestFocus()` from elsewhere (e.g. the vertical-traversal jump
+  /// from the center play button down into the actions row).
+  final FocusNode? focusNode;
 
   const PlayerActionButton({
     super.key,
@@ -215,6 +219,7 @@ class PlayerActionButton extends StatefulWidget {
     this.highlight = false,
     this.isTv = false,
     this.focusOrder = 0,
+    this.focusNode,
   });
 
   @override
@@ -234,10 +239,15 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
   @override
   Widget build(BuildContext context) {
     final isActive = widget.highlight || _hovered || _focused || _pressed;
+    // On TV, focused state needs a high-contrast indicator (border + glow +
+    // slight scale) — the existing accent-tint alone is invisible at 3-4 m
+    // viewing distance. Mouse hover still uses the lighter tint.
+    final showTvFocusRing = widget.isTv && _focused;
 
     return FocusTraversalOrder(
       order: NumericFocusOrder(widget.focusOrder.toDouble()),
       child: Focus(
+        focusNode: widget.focusNode,
         onFocusChange: (value) => setState(() => _focused = value),
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -257,27 +267,47 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
             _hovered = false;
             _pressed = false;
           }),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            child: InkWell(
-              onTap: widget.onTap,
-              onHighlightChanged: _setPressed,
+          child: AnimatedScale(
+            scale: showTvFocusRing ? 1.06 : 1.0,
+            duration: HotstarPlayerStyle.fastMotionDuration,
+            child: Material(
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              hoverColor: Colors.transparent,
-              focusColor: Colors.transparent,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              child: AnimatedContainer(
-                duration: HotstarPlayerStyle.fastMotionDuration,
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 9),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
+              child: InkWell(
+                onTap: widget.onTap,
+                onHighlightChanged: _setPressed,
+                borderRadius: BorderRadius.circular(6),
+                hoverColor: Colors.transparent,
+                focusColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                child: AnimatedContainer(
+                  duration: HotstarPlayerStyle.fastMotionDuration,
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: showTvFocusRing
+                        ? Border.all(
+                            color: HotstarPlayerStyle.accent,
+                            width: 2,
+                          )
+                        : null,
+                    boxShadow: showTvFocusRing
+                        ? [
+                            BoxShadow(
+                              color: HotstarPlayerStyle.accent.withValues(
+                                alpha: 0.55,
+                              ),
+                              blurRadius: 14,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                  ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -314,6 +344,7 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                 ),
               ),
             ),
+          ),
           ),
         ),
       ),

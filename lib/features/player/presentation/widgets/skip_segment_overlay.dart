@@ -8,6 +8,7 @@ import '../../../../l10n/generated/app_localizations.dart';
 import '../../../skip/data/skip_service.dart';
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
+import 'player_prompt_placement.dart';
 
 /// Displays a contextual "Skip Intro / Skip Recap / Skip Outro" button
 /// when the current playback position falls inside a known [SkipSegment].
@@ -114,8 +115,6 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
     }
   }
 
-
-
   void _handleSkip(SkipSegment segment) {
     ref
         .read(playerControllerProvider.notifier)
@@ -155,14 +154,9 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
 
   Widget _buildButton(SkipSegment? activeSegment) {
     final size = MediaQuery.sizeOf(context);
-    final padding = MediaQuery.viewPaddingOf(context);
     final isCompact = size.shortestSide < 600;
-    final bottomOffset = isCompact ? 108.0 : 116.0;
-    final sideOffset = isCompact ? 18.0 : 24.0;
 
-    return Positioned(
-      right: sideOffset + padding.right,
-      bottom: bottomOffset + padding.bottom,
+    return PlayerPromptPlacement(
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
