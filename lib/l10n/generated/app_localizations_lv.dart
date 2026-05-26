@@ -1087,6 +1087,15 @@ class AppLocalizationsLv extends AppLocalizations {
   String get skip => 'Izlaist';
 
   @override
+  String get skipIntro => 'Skip Intro';
+
+  @override
+  String get skipOutro => 'Skip Outro';
+
+  @override
+  String get skipRecap => 'Skip Recap';
+
+  @override
   String get goLive => 'Tiešraide';
 
   @override

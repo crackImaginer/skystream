@@ -1102,6 +1102,15 @@ class AppLocalizationsTa extends AppLocalizations {
   String get skip => 'தவிர்';
 
   @override
+  String get skipIntro => 'Skip Intro';
+
+  @override
+  String get skipOutro => 'Skip Outro';
+
+  @override
+  String get skipRecap => 'Skip Recap';
+
+  @override
   String get goLive => 'நேரலை';
 
   @override

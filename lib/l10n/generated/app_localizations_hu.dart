@@ -1087,6 +1087,15 @@ class AppLocalizationsHu extends AppLocalizations {
   String get skip => 'Kihagyás';
 
   @override
+  String get skipIntro => 'Skip Intro';
+
+  @override
+  String get skipOutro => 'Skip Outro';
+
+  @override
+  String get skipRecap => 'Skip Recap';
+
+  @override
   String get goLive => 'Élő adás';
 
   @override

@@ -27,6 +27,7 @@ import 'player_bottom_sheets.dart';
 import 'player_loading_overlay.dart';
 import 'player_osd_overlay.dart';
 import 'player_episode_overlay.dart';
+import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
 import '../player_platform_service.dart';
 import '../player_gesture_handler.dart';
@@ -759,6 +760,9 @@ class SkyStreamPlayerControlsState
       playerControllerProvider.select((s) => s.maxPlaybackSpeed),
     );
     final isSeries = ref.read(playerControllerProvider.notifier).isSeries;
+    final skipSegments = ref.watch(
+      playerControllerProvider.select((s) => s.skipSegments),
+    );
     final uiPhase = ref.watch(
       playerControllerProvider.select((s) => s.uiPhase),
     );
@@ -910,6 +914,20 @@ class SkyStreamPlayerControlsState
                     onDismiss: () => ref
                         .read(playerControllerProvider.notifier)
                         .dismissNextEpisodeOverlay(),
+                  ),
+
+                // Skip Segment Overlay (Skip Intro / Skip Recap / Skip Outro)
+                // Suppressed when Resume or Next Episode prompts are active
+                // to avoid UI collisions and decision fatigue.
+                if (resumePromptPosition == null &&
+                    resumePromptPercentage == null &&
+                    !showNextEpOverlay &&
+                    skipSegments.isNotEmpty)
+                  SkipSegmentOverlay(
+                    player: widget.player,
+                    videoViewController: widget.videoViewController,
+                    skipSegments: skipSegments,
+                    isTv: _isTv,
                   ),
 
                 // Episode Sidebar Overlay

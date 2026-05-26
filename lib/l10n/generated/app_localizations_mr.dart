@@ -1087,6 +1087,15 @@ class AppLocalizationsMr extends AppLocalizations {
   String get skip => 'वगळा';
 
   @override
+  String get skipIntro => 'Skip Intro';
+
+  @override
+  String get skipOutro => 'Skip Outro';
+
+  @override
+  String get skipRecap => 'Skip Recap';
+
+  @override
   String get goLive => 'थेट सुरू करा';
 
   @override

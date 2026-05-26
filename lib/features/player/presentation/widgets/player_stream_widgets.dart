@@ -5,6 +5,7 @@ import 'package:video_view/video_view.dart' as vv;
 import '../player_controller.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
+import '../../../skip/data/skip_service.dart';
 
 /// A self-contained progress bar widget that uses StreamBuilder to avoid
 /// rebuilding the parent widget on every position update.
@@ -95,13 +96,20 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
       playerControllerProvider.select((s) => s.canSeek),
     );
 
+    final skipSegments = ref.watch(
+      playerControllerProvider.select((s) => s.skipSegments),
+    );
+
     if (useExoPlayer && widget.videoViewController != null) {
-      return _buildVideoViewBar(canSeek: canSeek);
+      return _buildVideoViewBar(canSeek: canSeek, skipSegments: skipSegments);
     }
-    return _buildMediaKitBar(canSeek: canSeek);
+    return _buildMediaKitBar(canSeek: canSeek, skipSegments: skipSegments);
   }
 
-  Widget _buildVideoViewBar({required bool canSeek}) {
+  Widget _buildVideoViewBar({
+    required bool canSeek,
+    required List<SkipSegment> skipSegments,
+  }) {
     final isLive = ref.watch(playerControllerProvider.select((s) => s.isLive));
 
     return ValueListenableBuilder<int>(
@@ -129,6 +137,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                   .read(playerControllerProvider.notifier)
                   .seekTo(Duration(milliseconds: val.toInt())),
               isLive: isLive,
+              skipSegments: skipSegments,
             );
           },
         );
@@ -136,7 +145,10 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     );
   }
 
-  Widget _buildMediaKitBar({required bool canSeek}) {
+  Widget _buildMediaKitBar({
+    required bool canSeek,
+    required List<SkipSegment> skipSegments,
+  }) {
     final isLive = ref.watch(playerControllerProvider.select((s) => s.isLive));
 
     return StreamBuilder<Duration>(
@@ -191,6 +203,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                   .read(playerControllerProvider.notifier)
                   .seekTo(Duration(milliseconds: val.toInt())),
               isLive: isLive,
+              skipSegments: skipSegments,
             );
           },
         );
@@ -206,6 +219,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     required Widget? bufferWidget,
     required bool canSeek,
     required void Function(double val) onSeekEnd,
+    required List<SkipSegment> skipSegments,
     bool isLive = false,
   }) {
     final isDragging = _dragValue != null;
@@ -238,6 +252,29 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                   clipBehavior: Clip.none,
                   children: [
                     ?bufferWidget,
+                    if (durationMs > 0 && skipSegments.isNotEmpty)
+                      ...skipSegments.map((seg) {
+                        final leftPercent = (seg.startTime * 1000 / durationMs)
+                            .clamp(0.0, 1.0);
+                        final rightPercent = (seg.endTime * 1000 / durationMs)
+                            .clamp(0.0, 1.0);
+                        if (leftPercent >= rightPercent) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Positioned(
+                          left: constraints.maxWidth * leftPercent,
+                          width:
+                              constraints.maxWidth *
+                              (rightPercent - leftPercent),
+                          height: 2.5,
+                          child: ColoredBox(
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.8,
+                            ),
+                          ),
+                        );
+                      }),
                     SliderTheme(
                       data: SliderThemeData(
                         trackHeight: 2.5,

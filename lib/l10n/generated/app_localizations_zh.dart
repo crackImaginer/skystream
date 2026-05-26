@@ -1057,6 +1057,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get skip => '跳过';
 
   @override
+  String get skipIntro => 'Skip Intro';
+
+  @override
+  String get skipOutro => 'Skip Outro';
+
+  @override
+  String get skipRecap => 'Skip Recap';
+
+  @override
   String get goLive => '进入直播';
 
   @override
