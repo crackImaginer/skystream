@@ -60,6 +60,12 @@ class TmdbDetailsDesktopHero extends ConsumerWidget {
               imageUrl: backdropImageUrl,
               fit: BoxFit.cover,
               alignment: Alignment.centerRight,
+              // Bound decoded bitmap; H29 makes desktop/TV fetch `original`
+              // backdrops which can be 3840 px wide.
+              memCacheWidth:
+                  (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .round(),
               errorWidget: (_, _, _) =>
                   ThumbnailErrorPlaceholder(label: title, isBackdrop: true),
             ),

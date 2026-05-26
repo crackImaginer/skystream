@@ -310,11 +310,24 @@ class _TmdbMovieDetailsScreenState
     final director = data.director;
     final logoUrl = data.logoUrl;
 
+    // The expanded hero is designed for portrait. In landscape phones
+    // (~360 dp tall) a 550 dp expanded header overflows the entire screen,
+    // forcing the user to scroll past nothing-but-AppBar before reaching
+    // any content. Clamp by orientation: portrait keeps the original
+    // 550 dp; landscape uses ~80% of available height, bounded so the
+    // hero stays meaningful on tiny screens and doesn't dominate on tall
+    // foldables.
+    final mq = MediaQuery.sizeOf(context);
+    final isLandscape = mq.width > mq.height;
+    final double expandedHeaderHeight = isLandscape
+        ? (mq.height * 0.80).clamp(220.0, 400.0)
+        : 550.0;
+
     return CustomScrollView(
       controller: _scrollController,
       slivers: [
         SliverAppBar(
-          expandedHeight: 550,
+          expandedHeight: expandedHeaderHeight,
           pinned: true,
           backgroundColor: Theme.of(
             context,
@@ -371,6 +384,14 @@ class _TmdbMovieDetailsScreenState
                       child: CachedNetworkImage(
                         imageUrl: backdropImageUrl,
                         fit: BoxFit.cover,
+                        // Bound the decoded bitmap to display pixels. After
+                        // H29, TV / desktop fetches `original`-size backdrops
+                        // (~3840 px on 4K) — decoding at source would cost
+                        // ~33 MB per image and starve the image cache.
+                        memCacheWidth:
+                            (MediaQuery.sizeOf(context).width *
+                                    MediaQuery.devicePixelRatioOf(context))
+                                .round(),
                         placeholder: (context, url) => Container(
                           color: Theme.of(
                             context,

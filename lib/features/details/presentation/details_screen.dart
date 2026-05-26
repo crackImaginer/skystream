@@ -128,6 +128,13 @@ class _DetailsScreenState extends ConsumerState<DetailsScreen> {
                           '',
                       fit: BoxFit.cover,
                       alignment: Alignment.topCenter,
+                      // Bound decoded bitmap; plugin backdrops are often at
+                      // source resolution. Without this, 4K-source posters
+                      // burn ~33 MB per detail page.
+                      memCacheWidth:
+                          (MediaQuery.sizeOf(context).width *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round(),
                       placeholder: (context, url) =>
                           Container(color: Theme.of(context).dividerColor),
                       errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(

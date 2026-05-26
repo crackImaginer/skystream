@@ -21,21 +21,45 @@ class ExpandableText extends StatefulWidget {
 class _ExpandableTextState extends State<ExpandableText> {
   bool _isExpanded = false;
 
+  // Cached `TextPainter.didExceedMaxLines` result. Recomputed only when the
+  // input that affects it (text, maxLines, style, max width) actually
+  // changes — not on every parent rebuild. Without this, scrolling /
+  // theming / locale change can re-run a full TextPainter.layout() for
+  // multi-hundred-character synopses every frame.
+  bool _didExceedMaxLines = false;
+  String? _cachedText;
+  int? _cachedMaxLines;
+  double? _cachedMaxWidth;
+  TextStyle? _cachedStyle;
+
+  bool _recomputeIfNeeded(BoxConstraints constraints) {
+    if (_cachedText == widget.text &&
+        _cachedMaxLines == widget.maxLines &&
+        _cachedMaxWidth == constraints.maxWidth &&
+        _cachedStyle == widget.style) {
+      return _didExceedMaxLines;
+    }
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: widget.maxLines,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: constraints.maxWidth);
+    _didExceedMaxLines = textPainter.didExceedMaxLines;
+    textPainter.dispose();
+    _cachedText = widget.text;
+    _cachedMaxLines = widget.maxLines;
+    _cachedMaxWidth = constraints.maxWidth;
+    _cachedStyle = widget.style;
+    return _didExceedMaxLines;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textSpan = TextSpan(text: widget.text, style: widget.style);
-        final textPainter = TextPainter(
-          text: textSpan,
-          maxLines: widget.maxLines,
-          textDirection: TextDirection.ltr,
-        );
-        textPainter.layout(maxWidth: constraints.maxWidth);
-
-        final isTruncated = textPainter.didExceedMaxLines;
+        final isTruncated = _recomputeIfNeeded(constraints);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

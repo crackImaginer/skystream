@@ -80,6 +80,13 @@ class DetailsDesktopHero extends ConsumerWidget {
               imageUrl: backdropUrl,
               fit: BoxFit.cover,
               alignment: Alignment.centerRight,
+              // Bound decoded bitmap; plugin-supplied backdrops are often
+              // already at source resolution (no size negotiation), so a 4K
+              // poster decoded at native size would burn ~33 MB.
+              memCacheWidth:
+                  (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .round(),
               errorWidget: (_, _, _) => ThumbnailErrorPlaceholder(
                 label: displayItem.title,
                 isBackdrop: true,
