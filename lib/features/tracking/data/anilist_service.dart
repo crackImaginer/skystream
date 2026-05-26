@@ -6,25 +6,33 @@ import '../domain/sync_progress_item.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../core/network/dio_client_provider.dart';
-import '../../../../core/storage/storage_service.dart';
+import '../../../../core/storage/secure_token_storage.dart';
 import '../../../../core/config/sync_config.dart';
 
 part 'anilist_service.g.dart';
 
 class AniListService implements TrackingService {
   final Dio _dio;
-  final StorageService _storage;
+  final SecureTokenStorage _storage;
 
   static const String _clientId = SyncConfig.anilistClientId;
+  static const String _kAccessTokenKey = 'anilist_access_token';
 
   String? _accessToken;
+  Future<void>? _initFuture;
 
   AniListService(this._dio, this._storage) {
-    _initToken();
+    _initFuture = _initToken();
   }
 
-  void _initToken() {
-    _accessToken = _storage.getString('anilist_access_token');
+  Future<void> _initToken() async {
+    _accessToken = await _storage.read(_kAccessTokenKey);
+  }
+
+  Future<void> _ensureInit() async {
+    if (_initFuture != null) {
+      await _initFuture;
+    }
   }
 
   @override
@@ -37,7 +45,10 @@ class AniListService implements TrackingService {
   String get mainUrl => 'https://anilist.co';
 
   @override
-  Future<bool> get isLoggedIn async => _accessToken != null;
+  Future<bool> get isLoggedIn async {
+    await _ensureInit();
+    return _accessToken != null;
+  }
 
   @override
   Future<bool> login({
@@ -98,7 +109,7 @@ class AniListService implements TrackingService {
       }
 
       _accessToken = token;
-      await _storage.setString('anilist_access_token', _accessToken!);
+      await _storage.write(_kAccessTokenKey, _accessToken!);
       talker.debug('AniListService: Token saved successfully');
       return true;
     } catch (e) {
@@ -111,7 +122,7 @@ class AniListService implements TrackingService {
   Future<void> logout() async {
     talker.debug('AniListService: Logging out...');
     _accessToken = null;
-    await _storage.remove('anilist_access_token');
+    await _storage.delete(_kAccessTokenKey);
   }
 
   @override
@@ -161,6 +172,19 @@ class AniListService implements TrackingService {
         ),
       );
 
+      // AniList returns 200 OK even when the GraphQL mutation has an
+      // `errors` field (validation, permission, rate-limit). Treat that
+      // as a failure so the user isn't silently ignored.
+      final body = response.data;
+      if (response.statusCode == 200 &&
+          body is Map &&
+          body['errors'] is List &&
+          (body['errors'] as List).isNotEmpty) {
+        talker.error(
+          'AniListService: GraphQL errors on SaveMediaListEntry: ${body['errors']}',
+        );
+        return false;
+      }
       talker.debug(
         'AniListService: SaveMediaListEntry success: ${response.statusCode}',
       );
@@ -262,6 +286,6 @@ class AniListService implements TrackingService {
 AniListService aniListService(Ref ref) {
   return AniListService(
     ref.watch(dioClientProvider),
-    ref.watch(storageServiceProvider),
+    ref.watch(secureTokenStorageProvider),
   );
 }

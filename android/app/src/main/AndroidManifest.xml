@@ -109,6 +109,8 @@
         <package android:name="com.brouken.player" />
         <package android:name="is.xyz.mpv" />
         <package android:name="app.marlboroadvance.mpvex" />
+        <package android:name="com.instantbits.cast.webvideo" />
+        <package android:name="com.instantbits.cast.webvideo.premium" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="video/*" />

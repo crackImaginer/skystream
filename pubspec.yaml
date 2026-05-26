@@ -95,6 +95,9 @@ dependencies:
   talker_riverpod_logger: ^5.1.16
   visibility_detector: ^0.4.0+2
   qr_flutter: ^4.1.0
+  # Platform keychain/keystore for OAuth tokens (Trakt/Simkl/MAL/AniList).
+  # Falls back to encrypted Hive on Linux/Windows where libsecret is missing.
+  flutter_secure_storage: ^9.2.2
 
 
 dev_dependencies:

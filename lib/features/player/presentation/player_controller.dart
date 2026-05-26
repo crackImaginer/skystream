@@ -14,6 +14,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:video_view/video_view.dart'
     show VideoController, SubtitleTrackConfig, VideoControllerPlaybackState;
 
+import '../../../../core/logger/app_logger.dart';
 import '../../../../core/services/download_service.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/extensions/base_provider.dart';
@@ -2033,7 +2034,11 @@ class PlayerController extends Notifier<PlayerState> {
         unawaited(
           ref
               .read(syncManagerProvider)
-              .scrobbleStart(_item, _resolveCurrentEpisode(), progressDecimal),
+              .scrobbleStart(_item, _resolveCurrentEpisode(), progressDecimal)
+              .catchError(
+                (Object e) =>
+                    talker.error('scrobbleStart (play resume) failed', e),
+              ),
         );
       }
     } catch (_) {}
@@ -2061,7 +2066,10 @@ class PlayerController extends Notifier<PlayerState> {
         unawaited(
           ref
               .read(syncManagerProvider)
-              .scrobblePause(_item, _resolveCurrentEpisode(), progressDecimal),
+              .scrobblePause(_item, _resolveCurrentEpisode(), progressDecimal)
+              .catchError(
+                (Object e) => talker.error('scrobblePause failed', e),
+              ),
         );
       }
     } catch (_) {}
@@ -2977,14 +2985,26 @@ class PlayerController extends Notifier<PlayerState> {
 
       // 1. Scrobble Start (remote only, once per playback)
       if (!_hasScrobbleStarted && pos > 0) {
-        syncManager.scrobbleStart(_item, currentEpisode, progressDecimal);
+        unawaited(
+          syncManager
+              .scrobbleStart(_item, currentEpisode, progressDecimal)
+              .catchError(
+                (Object e) => talker.error('scrobbleStart failed', e),
+              ),
+        );
         _hasScrobbleStarted = true;
       }
 
       // 2. Mark Watched (remote & local completion logic)
       if (progressPercent >= 85) {
         if (!_hasMarkedWatched) {
-          syncManager.markWatched(_item, currentEpisode);
+          unawaited(
+            syncManager
+                .markWatched(_item, currentEpisode)
+                .catchError(
+                  (Object e) => talker.error('markWatched failed', e),
+                ),
+          );
           _hasMarkedWatched = true;
         }
 
@@ -3155,9 +3175,14 @@ class PlayerController extends Notifier<PlayerState> {
       }
       final double progressDecimal = dur > 0 ? pos / dur : 0.0;
       if (_hasScrobbleStarted && !_hasMarkedWatched) {
-        ref
-            .read(syncManagerProvider)
-            .scrobbleStop(_item, _resolveCurrentEpisode(), progressDecimal);
+        unawaited(
+          ref
+              .read(syncManagerProvider)
+              .scrobbleStop(_item, _resolveCurrentEpisode(), progressDecimal)
+              .catchError(
+                (Object e) => talker.error('scrobbleStop failed', e),
+              ),
+        );
       }
     } catch (_) {}
 

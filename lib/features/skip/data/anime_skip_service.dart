@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -10,8 +12,38 @@ part 'anime_skip_service.g.dart';
 
 class AnimeSkipService implements SkipService {
   final Dio _dio;
-  
+
   static const String _clientId = SyncConfig.animeSkipClientId;
+
+  // Cache the three-step GraphQL chain (show → episodes → timestamps)
+  // for an hour, keyed by anilistId+episode. Without this, fast-skipping
+  // through anime episodes fires 3 GraphQL queries per seek.
+  static const int _cacheMax = 500;
+  static const Duration _cacheTtl = Duration(hours: 1);
+  static final LinkedHashMap<String, _CachedSegments> _cache =
+      LinkedHashMap<String, _CachedSegments>();
+
+  String _key(int anilistId, int episode) => '$anilistId:$episode';
+
+  List<SkipSegment>? _lookupCached(String key) {
+    final entry = _cache[key];
+    if (entry == null) return null;
+    if (DateTime.now().isAfter(entry.expiresAt)) {
+      _cache.remove(key);
+      return null;
+    }
+    _cache.remove(key);
+    _cache[key] = entry;
+    return entry.segments;
+  }
+
+  void _store(String key, List<SkipSegment> segments) {
+    _cache.remove(key);
+    _cache[key] = _CachedSegments(segments, DateTime.now().add(_cacheTtl));
+    while (_cache.length > _cacheMax) {
+      _cache.remove(_cache.keys.first);
+    }
+  }
 
   AnimeSkipService(this._dio);
 
@@ -28,6 +60,10 @@ class AnimeSkipService implements SkipService {
     int? duration,
   }) async {
     if (anilistId == null) return [];
+
+    final key = _key(anilistId, episode);
+    final cached = _lookupCached(key);
+    if (cached != null) return cached;
 
     try {
       const String serviceEnum = 'ANILIST';
@@ -51,6 +87,7 @@ class AnimeSkipService implements SkipService {
       final data = response.data?['data'];
       if (data == null || data['findShowsByExternalId'] == null || (data['findShowsByExternalId'] as List).isEmpty) {
         if (kDebugMode) debugPrint('AnimeSkip: Could not find show for anilistId $anilistId');
+        _store(key, const []);
         return [];
       }
       
@@ -75,6 +112,7 @@ class AnimeSkipService implements SkipService {
       final episodeData = response.data?['data'];
       if (episodeData == null || episodeData['findEpisodesByShowId'] == null || (episodeData['findEpisodesByShowId'] as List).isEmpty) {
         if (kDebugMode) debugPrint('AnimeSkip: Could not find episodes for showId $showId');
+        _store(key, const []);
         return [];
       }
 
@@ -87,6 +125,7 @@ class AnimeSkipService implements SkipService {
 
       if (targetEpisode == null) {
         if (kDebugMode) debugPrint('AnimeSkip: Could not find episode $episode for showId $showId');
+        _store(key, const []);
         return [];
       }
 
@@ -111,12 +150,14 @@ class AnimeSkipService implements SkipService {
       final timestampData = response.data?['data'];
       if (timestampData == null || timestampData['findTimestampsByEpisodeId'] == null) {
         if (kDebugMode) debugPrint('AnimeSkip: Could not find timestamps for episodeId $episodeId');
+        _store(key, const []);
         return [];
       }
 
       final timestamps = timestampData['findTimestampsByEpisodeId'] as List;
       if (timestamps.isEmpty) {
         if (kDebugMode) debugPrint('AnimeSkip: Timestamps array is empty for episodeId $episodeId');
+        _store(key, const []);
         return [];
       }
 
@@ -164,6 +205,7 @@ class AnimeSkipService implements SkipService {
         }
       }
 
+      _store(key, segments);
       return segments;
     } catch (e) {
       if (e is DioException && e.response != null) {
@@ -172,9 +214,17 @@ class AnimeSkipService implements SkipService {
         if (kDebugMode) debugPrint('AnimeSkip Caught Error: $e');
       }
     }
-    
+
+    // Cache empty result so we don't repeat the 3-query chain on every seek.
+    _store(key, const []);
     return [];
   }
+}
+
+class _CachedSegments {
+  _CachedSegments(this.segments, this.expiresAt);
+  final List<SkipSegment> segments;
+  final DateTime expiresAt;
 }
 
 @riverpod

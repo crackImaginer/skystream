@@ -233,19 +233,25 @@ Future<List<SyncProgressItem>> syncedProgress(Ref ref) async {
 
     final localDate = DateTime.fromMillisecondsSinceEpoch(localMatch.timestamp);
     if (localDate.isBefore(syncItem.pausedAt)) {
-      final newPos = localMatch.duration > 0 
+      final newPos = localMatch.duration > 0
           ? (localMatch.duration * syncItem.progressPercentage / 100).round()
           : 0;
-      
-      Future.microtask(() {
-        ref.read(watchHistoryProvider.notifier).updateHistoryItemTimestampAndPosition(
-          localMatch,
-          syncItem.pausedAt.millisecondsSinceEpoch,
-          newPos,
-        );
+      // Defer the cross-provider write to the next event-loop turn so this
+      // provider's build finishes before watchHistoryProvider is notified.
+      // Using Future<void>.delayed(Duration.zero) keeps us off the microtask
+      // queue — a microtask scheduled from inside a provider's build runs
+      // before the build completes, which can re-enter the same provider.
+      Future<void>.delayed(Duration.zero, () {
+        ref
+            .read(watchHistoryProvider.notifier)
+            .updateHistoryItemTimestampAndPosition(
+              localMatch,
+              syncItem.pausedAt.millisecondsSinceEpoch,
+              newPos,
+            );
       });
     }
-    
+
     return false;
   }).toList();
 

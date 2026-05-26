@@ -24,6 +24,7 @@ import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/network/cloudflare_bypass.dart';
 import 'package:dpad/dpad.dart';
+import 'core/config/tmdb_config.dart';
 import 'core/providers/device_info_provider.dart';
 
 void main() async {
@@ -287,6 +288,16 @@ class _MyAppState extends ConsumerState<MyApp> {
     final appRouter = ref.watch(appRouterProvider);
     final locale = ref.watch(localeProvider);
     final profileAsync = ref.watch(deviceProfileProvider);
+
+    // Mirror the resolved device profile into TmdbConfig's static cache so
+    // pure-utility URL builders (AppImageFallbacks, TmdbDetails ctor) pick
+    // TV / desktop-class image sizes once the async profile resolves.
+    // Until then they fall back to the mobile defaults — a few cold-start
+    // frames may use w1280 backdrops on TV before snapping to original.
+    ref.listen<AsyncValue<DeviceProfile>>(deviceProfileProvider, (prev, next) {
+      final value = next.value;
+      if (value != null) TmdbConfig.setProfile(value);
+    });
 
     // Reactive Listener: Keeps UpdateController alive and handles the UI side-effect
     ref.listen<UpdateState>(updateControllerProvider, (previous, next) {

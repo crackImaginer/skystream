@@ -6,25 +6,33 @@ import '../domain/sync_progress_item.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../core/network/dio_client_provider.dart';
-import '../../../../core/storage/storage_service.dart';
+import '../../../../core/storage/secure_token_storage.dart';
 import '../../../../core/config/sync_config.dart';
 
 part 'simkl_service.g.dart';
 
 class SimklService implements TrackingService {
   final Dio _dio;
-  final StorageService _storage;
-  
+  final SecureTokenStorage _storage;
+
   static const String _clientId = SyncConfig.simklClientId;
-  
+  static const String _kAccessTokenKey = 'simkl_access_token';
+
   String? _accessToken;
+  Future<void>? _initFuture;
 
   SimklService(this._dio, this._storage) {
-    _initToken();
+    _initFuture = _initToken();
   }
 
-  void _initToken() {
-    _accessToken = _storage.getString('simkl_access_token');
+  Future<void> _initToken() async {
+    _accessToken = await _storage.read(_kAccessTokenKey);
+  }
+
+  Future<void> _ensureInit() async {
+    if (_initFuture != null) {
+      await _initFuture;
+    }
   }
 
   @override
@@ -37,7 +45,10 @@ class SimklService implements TrackingService {
   String get mainUrl => 'https://simkl.com';
 
   @override
-  Future<bool> get isLoggedIn async => _accessToken != null;
+  Future<bool> get isLoggedIn async {
+    await _ensureInit();
+    return _accessToken != null;
+  }
 
   @override
   Future<bool> login({
@@ -84,7 +95,7 @@ class SimklService implements TrackingService {
           final data = tokenResponse.data;
           if (data is Map && data['result'] == 'OK' && data['access_token'] != null) {
             _accessToken = data['access_token'].toString();
-            await _storage.setString('simkl_access_token', _accessToken!);
+            await _storage.write(_kAccessTokenKey, _accessToken!);
             talker.debug('SimklService: Login successful!');
             return true;
           }
@@ -107,7 +118,7 @@ class SimklService implements TrackingService {
   Future<void> logout() async {
     talker.debug('SimklService: Logging out...');
     _accessToken = null;
-    await _storage.remove('simkl_access_token');
+    await _storage.delete(_kAccessTokenKey);
   }
 
   @override
@@ -324,6 +335,6 @@ class SimklService implements TrackingService {
 SimklService simklService(Ref ref) {
   return SimklService(
     ref.watch(dioClientProvider),
-    ref.watch(storageServiceProvider),
+    ref.watch(secureTokenStorageProvider),
   );
 }

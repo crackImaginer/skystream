@@ -91,6 +91,23 @@ class ExternalPlayerService {
       supportedPlatforms: {TargetPlatform.android},
       androidPackage: 'app.marlboroadvance.mpvex',
     ),
+    // Web Video Cast — accepts ACTION_VIEW with video/* mime, routes to
+    // Chromecast / DLNA / Roku / Fire TV / smart TV. Useful for casting
+    // a SkyStream-resolved stream URL to a TV without leaving the phone.
+    ExternalPlayer(
+      id: 'web_video_cast',
+      displayName: 'Web Video Cast',
+      icon: Icons.cast,
+      supportedPlatforms: {TargetPlatform.android},
+      androidPackage: 'com.instantbits.cast.webvideo',
+    ),
+    ExternalPlayer(
+      id: 'web_video_cast_premium',
+      displayName: 'Web Video Cast (Premium)',
+      icon: Icons.cast,
+      supportedPlatforms: {TargetPlatform.android},
+      androidPackage: 'com.instantbits.cast.webvideo.premium',
+    ),
     ExternalPlayer(
       id: 'mpv',
       displayName: 'mpv',

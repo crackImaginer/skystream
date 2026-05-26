@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -26,17 +27,62 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
   double progress = 0;
   final TextEditingController _urlController = TextEditingController();
   bool _isPopped = false;
+  // Parsed once for the redirect comparison below.
+  late final Uri? _expectedRedirect = Uri.tryParse(widget.redirectUrlPrefix);
+
+  /// Compare a candidate redirect URL against [widget.redirectUrlPrefix] by
+  /// scheme + host + optional port — never by raw string prefix.
+  /// String prefix matching is unsafe because e.g. `http://localhost`
+  /// would also match `http://localhost.attacker.com`, letting a
+  /// malicious redirect inject a token from a different origin.
+  bool _matchesRedirect(Uri url) {
+    final expected = _expectedRedirect;
+    if (expected == null) return false;
+    if (url.scheme != expected.scheme) return false;
+    if (url.host != expected.host) return false;
+    if (expected.hasPort && url.port != expected.port) return false;
+    return true;
+  }
 
   void _handleRedirect(WebUri? url) {
     if (url == null || _isPopped) return;
-    final urlStr = url.toString();
-    if (urlStr.startsWith(widget.redirectUrlPrefix) ||
-        (widget.providerName == 'AniList' &&
-            (urlStr.startsWith('http://localhost') ||
-                urlStr.startsWith('https://anilist.co/api/v2/oauth/pin')))) {
+    final parsed = Uri.tryParse(url.toString());
+    if (parsed == null) return;
+
+    final isExpected = _matchesRedirect(parsed);
+    // AniList's implicit-grant flow puts the access token in the fragment of
+    // its pin page (https://anilist.co/api/v2/oauth/pin#access_token=…)
+    // before any redirect to localhost happens — accept that exact URL too.
+    final isAnilistPin = widget.providerName == 'AniList' &&
+        parsed.scheme == 'https' &&
+        parsed.host == 'anilist.co' &&
+        parsed.path == '/api/v2/oauth/pin';
+
+    if (isExpected || isAnilistPin) {
       _isPopped = true;
-      Navigator.of(context).pop(urlStr);
+      Navigator.of(context).pop(url.toString());
     }
+  }
+
+  /// Clear cookies, localStorage, and HTTP cache so a previous user's web
+  /// session can't silently re-authenticate the device's current user.
+  Future<void> _purgeWebViewState() async {
+    try {
+      await CookieManager.instance().deleteAllCookies();
+    } catch (_) {}
+    try {
+      await InAppWebViewController.clearAllCache();
+    } catch (_) {}
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget — the webview launches the auth URL immediately, and
+    // we want stale session state gone before the page even loads. If it
+    // races, worst case the user sees themselves auto-logged-in once and
+    // we still clear for next time.
+    unawaited(_purgeWebViewState());
   }
 
   @override
@@ -163,9 +209,12 @@ class _WebViewAuthDialogState extends State<WebViewAuthDialog> {
                   },
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
                     final url = navigationAction.request.url;
-                    if (url != null && url.toString().startsWith(widget.redirectUrlPrefix)) {
-                      _handleRedirect(url);
-                      return NavigationActionPolicy.CANCEL;
+                    if (url != null) {
+                      final parsed = Uri.tryParse(url.toString());
+                      if (parsed != null && _matchesRedirect(parsed)) {
+                        _handleRedirect(url);
+                        return NavigationActionPolicy.CANCEL;
+                      }
                     }
                     return NavigationActionPolicy.ALLOW;
                   },

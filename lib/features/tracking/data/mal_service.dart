@@ -9,28 +9,45 @@ import '../domain/sync_progress_item.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../core/network/dio_client_provider.dart';
-import '../../../../core/storage/storage_service.dart';
+import '../../../../core/storage/secure_token_storage.dart';
 import '../../../../core/config/sync_config.dart';
 
 part 'mal_service.g.dart';
 
 class MalService implements TrackingService {
   final Dio _dio;
-  final StorageService _storage;
+  final SecureTokenStorage _storage;
 
   static const String _clientId = SyncConfig.malClientId;
-  static const String _redirectUri = 'http://localhost';
+  // MAL OAuth redirect — held in [SyncConfig.malRedirectUri] for parity with
+  // the auth-URL builder in account_settings_screen.
+  static const String _redirectUri = SyncConfig.malRedirectUri;
+
+  static const String _kAccessTokenKey = 'mal_access_token';
+  static const String _kRefreshTokenKey = 'mal_refresh_token';
 
   String? _accessToken;
   String? _refreshToken;
+  Future<void>? _initFuture;
+
+  // H32: serialize concurrent refresh attempts so multiple in-flight 401
+  // responses don't fire parallel refresh calls (MAL rejects duplicates as
+  // invalid_grant and burns the refresh token).
+  Future<bool>? _refreshInFlight;
 
   MalService(this._dio, this._storage) {
-    _initToken();
+    _initFuture = _initToken();
   }
 
-  void _initToken() {
-    _accessToken = _storage.getString('mal_access_token');
-    _refreshToken = _storage.getString('mal_refresh_token');
+  Future<void> _initToken() async {
+    _accessToken = await _storage.read(_kAccessTokenKey);
+    _refreshToken = await _storage.read(_kRefreshTokenKey);
+  }
+
+  Future<void> _ensureInit() async {
+    if (_initFuture != null) {
+      await _initFuture;
+    }
   }
 
   @override
@@ -43,9 +60,17 @@ class MalService implements TrackingService {
   String get mainUrl => 'https://myanimelist.net';
 
   @override
-  Future<bool> get isLoggedIn async => _accessToken != null;
+  Future<bool> get isLoggedIn async {
+    await _ensureInit();
+    return _accessToken != null;
+  }
 
   /// Generate a PKCE code verifier (43-128 chars, URL-safe).
+  ///
+  /// MAL uniquely requires `code_challenge_method=plain` — they do not
+  /// implement S256. The `plain` method is still valid PKCE per RFC 7636
+  /// §4.2; the verifier is sent as-is and the server compares strings.
+  /// Do not "upgrade" to S256 — MAL will reject it with `invalid_request`.
   String generateCodeVerifier() {
     final random = Random.secure();
     final values = List<int>.generate(64, (_) => random.nextInt(256));
@@ -124,9 +149,9 @@ class MalService implements TrackingService {
         _accessToken = data['access_token'] as String;
         _refreshToken = data['refresh_token'] as String?;
 
-        await _storage.setString('mal_access_token', _accessToken!);
+        await _storage.write(_kAccessTokenKey, _accessToken!);
         if (_refreshToken != null) {
-          await _storage.setString('mal_refresh_token', _refreshToken!);
+          await _storage.write(_kRefreshTokenKey, _refreshToken!);
         }
 
         talker.debug('MALService: Token exchange successful');
@@ -142,7 +167,18 @@ class MalService implements TrackingService {
   }
 
   /// Refresh the access token using the stored refresh token.
-  Future<bool> _refreshAccessToken() async {
+  /// Serializes concurrent callers through [_refreshInFlight] so multiple
+  /// 401s from parallel API calls don't burn the refresh token.
+  Future<bool> _refreshAccessToken() {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final fut = _doRefreshAccessToken();
+    _refreshInFlight = fut;
+    fut.whenComplete(() => _refreshInFlight = null);
+    return fut;
+  }
+
+  Future<bool> _doRefreshAccessToken() async {
     if (_refreshToken == null) return false;
 
     try {
@@ -169,9 +205,9 @@ class MalService implements TrackingService {
         _accessToken = data['access_token'] as String;
         _refreshToken = data['refresh_token'] as String? ?? _refreshToken;
 
-        await _storage.setString('mal_access_token', _accessToken!);
+        await _storage.write(_kAccessTokenKey, _accessToken!);
         if (_refreshToken != null) {
-          await _storage.setString('mal_refresh_token', _refreshToken!);
+          await _storage.write(_kRefreshTokenKey, _refreshToken!);
         }
 
         talker.debug('MALService: Token refreshed successfully');
@@ -189,8 +225,8 @@ class MalService implements TrackingService {
     talker.debug('MALService: Logging out...');
     _accessToken = null;
     _refreshToken = null;
-    await _storage.remove('mal_access_token');
-    await _storage.remove('mal_refresh_token');
+    await _storage.delete(_kAccessTokenKey);
+    await _storage.delete(_kRefreshTokenKey);
   }
 
   @override
@@ -217,8 +253,9 @@ class MalService implements TrackingService {
     try {
       final data = <String, dynamic>{};
       if (status != null) data['status'] = status;
-      if (numWatchedEpisodes != null)
+      if (numWatchedEpisodes != null) {
         data['num_watched_episodes'] = numWatchedEpisodes;
+      }
 
       final response = await _dio.patch<dynamic>(
         'https://api.myanimelist.net/v2/anime/$malId/my_list_status',
@@ -347,6 +384,6 @@ class MalService implements TrackingService {
 MalService malService(Ref ref) {
   return MalService(
     ref.watch(dioClientProvider),
-    ref.watch(storageServiceProvider),
+    ref.watch(secureTokenStorageProvider),
   );
 }

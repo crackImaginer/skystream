@@ -362,14 +362,14 @@ class AccountSettingsScreen extends ConsumerWidget {
                               } else {
                                 final anilistService = ref.read(aniListServiceProvider);
 
-                                final authUrl = 'https://anilist.co/api/v2/oauth/authorize'
+                                const authUrl = 'https://anilist.co/api/v2/oauth/authorize'
                                     '?client_id=${SyncConfig.anilistClientId}'
                                     '&response_type=token';
 
                                 if (context.mounted) {
                                   final redirectUrl = await showDialog<String>(
                                     context: context,
-                                    builder: (context) => WebViewAuthDialog(
+                                    builder: (context) => const WebViewAuthDialog(
                                       providerName: 'AniList',
                                       initialUrl: authUrl,
                                       redirectUrlPrefix: 'http://localhost',
