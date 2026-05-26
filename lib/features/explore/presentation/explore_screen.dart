@@ -121,12 +121,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen>
             elevation: 0,
             flexibleSpace: ValueListenableBuilder<double>(
               valueListenable: _appBarOpacityNotifier,
+              // See home_screen.dart for why we fade via color alpha rather
+              // than Opacity — same saveLayer-per-frame issue.
               builder: (context, opacity, child) {
-                return Opacity(
-                  opacity: opacity,
-                  child: Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                  ),
+                return Container(
+                  color: Theme.of(
+                    context,
+                  ).scaffoldBackgroundColor.withValues(alpha: opacity),
                 );
               },
             ),

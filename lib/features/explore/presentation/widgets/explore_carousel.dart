@@ -74,12 +74,15 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
   }
 
   void _onParentScroll() {
-    // Skip parallax updates when the carousel is scrolled off-screen.
-    // Without this guard, every scroll event triggers a
-    // ValueListenableBuilder rebuild (Transform.translate + Opacity)
-    // that stalls the build phase and causes visible jitter in the
-    // content that IS on screen.
-    if (!_isVisibleOnScreen) return;
+    // Always update — do NOT gate on _isVisibleOnScreen. Earlier we tried
+    // to skip rebuilds while the carousel was off-screen, but that left
+    // _scrollOffset frozen at a stale value; when the user scrolled back
+    // up, syncing the offset on visibility-change caused a visible snap
+    // (VisibilityDetector throttles, so the catch-up frame lands after
+    // the user has already scrolled past it). The rebuild cost here is
+    // negligible — Transform/RenderTransform reuses its RenderObject, the
+    // CachedNetworkImage is cache-hit, and the whole carousel page is
+    // wrapped in a RepaintBoundary so off-screen rebuilds don't ripple.
     if (widget.scrollController!.hasClients) {
       _scrollOffset.value = widget.scrollController!.offset;
     }
@@ -117,6 +120,10 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
 
     return VisibilityDetector(
       key: const Key('explore-carousel-visibility'),
+      // Visibility is still tracked — but only to gate the 15s autoPlay
+      // timer (so we don't fire page transitions for an audience that
+      // isn't watching). Parallax offset updates ignore this flag; see
+      // [_onParentScroll] for the rationale.
       onVisibilityChanged: (info) {
         final visible = info.visibleFraction > 0.1;
         if (visible != _isVisibleOnScreen && mounted) {

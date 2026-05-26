@@ -172,9 +172,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         elevation: 0,
         flexibleSpace: ValueListenableBuilder<double>(
           valueListenable: _appBarOpacityNotifier,
-          builder: (context, opacity, _) => Opacity(
-            opacity: opacity,
-            child: Container(color: Theme.of(context).scaffoldBackgroundColor),
+          // Apply the fade via the color's alpha channel rather than an
+          // Opacity widget. Opacity forces a saveLayer() every frame for as
+          // long as the AppBar is in the tree (even at opacity 1.0), which
+          // shows up on the perf overlay as a constant raster cost. Alpha
+          // blending on a Container fill costs ~0.
+          builder: (context, opacity, _) => Container(
+            color: Theme.of(
+              context,
+            ).scaffoldBackgroundColor.withValues(alpha: opacity),
           ),
         ),
         title: Text(l10n.appTitle),
