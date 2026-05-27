@@ -93,7 +93,8 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
             _ => ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.only(bottom: 80), // Fab space
-              addAutomaticKeepAlives: false, // Fixes D-pad focus traversal crash when ExpansionTiles are cached off-screen
+              addAutomaticKeepAlives:
+                  false, // Fixes D-pad focus traversal crash when ExpansionTiles are cached off-screen
               itemCount: _calculateItemCount(state),
               itemBuilder: (context, index) {
                 final debugPlugins = state.installedPlugins
@@ -365,7 +366,9 @@ class _ExtensionsScreenState extends ConsumerState<ExtensionsScreen> {
           ),
         );
 
-    final isRepoInstalling = plugins.any((p) => state.installingPlugins.contains(p.packageName));
+    final isRepoInstalling = plugins.any(
+      (p) => state.installingPlugins.contains(p.packageName),
+    );
 
     return Card(
       margin: const EdgeInsets.only(

@@ -163,8 +163,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         unawaited(_playerController.setPlaybackSpeed(previousSpeed));
       }
     } else if (state == AppLifecycleState.resumed) {
-      // Only re-acquire wakelock if we were actually playing — leaving it
-      // enabled while paused drains battery for no reason (audit H4).
+      // Wakelock: re-acquire whenever the engine is currently playing on
+      // resume — not just when WE auto-paused on background. External
+      // play sources (media-session play from a notification, Bluetooth
+      // headphones, Android Auto) can flip playing=true while the app
+      // is backgrounded; the user then foregrounds the app to a playing
+      // stream with NO wakelock, and the screen sleeps during playback.
+      // (H-PLAYER-4)
+      final ctrl = ref.read(playerControllerProvider);
+      final isCurrentlyPlaying = ctrl.useExoPlayer
+          ? _videoViewController.playbackState.value ==
+                vv.VideoControllerPlaybackState.playing
+          : _player.state.playing;
+      if (isCurrentlyPlaying) {
+        WakelockPlus.enable();
+      }
+
+      // Only auto-play if we paused for backgrounding — don't override the
+      // user's explicit pause-before-background intent.
       if (_wasPlayingBeforeBackground) {
         _wasPlayingBeforeBackground = false;
         WakelockPlus.enable();
@@ -294,9 +310,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           return KeyEventResult.ignored;
         }
       } else {
+        // Hidden-controls input policy on TV:
+        // - Any key shows the controls (focus snaps back to play button).
+        // - Up/Down do ONLY that — don't fall through to the seek/volume
+        //   handlers below (they'd be confusing on TV where Up/Down has no
+        //   playback meaning).
+        // - Left/Right/Select/Enter show controls AND fall through, so the
+        //   user sees both the action and the freshly-visible overlay.
+        // Fixes Bug 3 + Bug 4 — without this, hidden focus on a top-right
+        // utility button could intercept arrow keys via the focus system
+        // before the root handler ever saw them.
+        _controlsKeyFinal.currentState?.showControls();
         if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          _controlsKeyFinal.currentState?.showControls();
           return KeyEventResult.handled;
         }
       }

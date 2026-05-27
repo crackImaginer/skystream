@@ -196,18 +196,27 @@ class DetailsController extends _$DetailsController {
           imdbId: fetchedItem.imdbId ?? item.imdbId,
         );
 
-        if (kDebugMode) {
-          debugPrint(
-            'DetailsController: Fetching missing IDs via MetadataResolutionService for ${withProvider.title}...',
-          );
-        }
-        final enrichedItem = await ref
-            .read(metadataResolutionServiceProvider)
-            .enrichWithIds(withProvider);
-        if (kDebugMode) {
-          debugPrint(
-            'DetailsController: Resulting tmdbId: ${enrichedItem.tmdbId}, imdbId: ${enrichedItem.imdbId}',
-          );
+        MultimediaItem enrichedItem = withProvider;
+        try {
+          if (kDebugMode) {
+            debugPrint(
+              'DetailsController: Fetching missing IDs via MetadataResolutionService for ${withProvider.title}...',
+            );
+          }
+          enrichedItem = await ref
+              .read(metadataResolutionServiceProvider)
+              .enrichWithIds(withProvider);
+          if (kDebugMode) {
+            debugPrint(
+              'DetailsController: Resulting tmdbId: ${enrichedItem.tmdbId}, imdbId: ${enrichedItem.imdbId}',
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+              'DetailsController: Metadata resolution failed, falling back to original item. Error: $e',
+            );
+          }
         }
         if (!ref.mounted) return;
 

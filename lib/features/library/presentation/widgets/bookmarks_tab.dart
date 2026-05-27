@@ -10,11 +10,21 @@ import '../library_provider.dart';
 
 import '../library_state.dart';
 
-class BookmarksTab extends ConsumerWidget {
+class BookmarksTab extends ConsumerStatefulWidget {
   const BookmarksTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BookmarksTab> createState() => _BookmarksTabState();
+}
+
+class _BookmarksTabState extends ConsumerState<BookmarksTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     final libraryState = ref.watch(libraryProvider);
     final isLarge = context.isTabletOrLarger;
     final double totalHeight = isLarge ? 180.0 : 150.0;

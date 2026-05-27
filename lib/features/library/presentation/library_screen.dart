@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/layout_constants.dart';
 import '../../../core/utils/responsive_breakpoints.dart';
@@ -145,7 +146,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _tabChip(
+            _TabChip(
               label: l10n.downloads,
               icon: Icons.download_for_offline_rounded,
               selected: _tabController.index == 0,
@@ -153,7 +154,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               theme: theme,
             ),
             const SizedBox(width: 8),
-            _tabChip(
+            _TabChip(
               label: l10n.bookmarks,
               icon: Icons.bookmark_rounded,
               selected: _tabController.index == 1,
@@ -166,53 +167,101 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     );
   }
 
-  Widget _tabChip({
-    required String label,
-    required IconData icon,
-    required bool selected,
-    required VoidCallback onTap,
-    required ThemeData theme,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? theme.colorScheme.primary.withValues(alpha: 0.15)
-              : theme.colorScheme.surfaceContainerHighest.withValues(
-                  alpha: 0.3,
+}
+
+class _TabChip extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  final ThemeData theme;
+
+  const _TabChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    required this.theme,
+  });
+
+  @override
+  State<_TabChip> createState() => _TabChipState();
+}
+
+class _TabChipState extends State<_TabChip> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final isTraditional =
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    final showHighlight = _isFocused && isTraditional;
+    final scale = showHighlight ? 1.04 : 1.0;
+
+    return Focus(
+      onFocusChange: (f) {
+        if (mounted) setState(() => _isFocused = f);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: scale,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                  : theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.3,
+                    ),
+              borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
+              border: showHighlight
+                  ? Border.all(color: Colors.white, width: 2)
+                  : (widget.selected
+                      ? Border.all(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        )
+                      : Border.all(color: Colors.transparent, width: 1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  widget.icon,
+                  size: 16,
+                  color: widget.selected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
-          borderRadius: BorderRadius.circular(LayoutConstants.radiusPill),
-          border: selected
-              ? Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                )
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
+                const SizedBox(width: 6),
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight:
+                        widget.selected ? FontWeight.w600 : FontWeight.normal,
+                    color: widget.selected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                color: selected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

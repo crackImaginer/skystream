@@ -205,8 +205,14 @@ class AnimeSkipService implements SkipService {
         }
       }
 
-      _store(key, segments);
-      return segments;
+      // Sanitize: the AnimeSkip data set is crowdsourced and routinely
+      // contains backwards / zero-length entries (typo in start vs end).
+      final cleaned = SkipSegment.sanitize(
+        segments,
+        durationSec: duration?.toDouble(),
+      );
+      _store(key, cleaned);
+      return cleaned;
     } catch (e) {
       if (e is DioException && e.response != null) {
         if (kDebugMode) debugPrint('AnimeSkip Caught Error: ${e.response?.statusCode} - ${e.response?.data}');

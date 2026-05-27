@@ -128,6 +128,9 @@ class EpisodeCard extends HookConsumerWidget {
       }
     }
 
+    final selectKeyDown = useRef(false);
+    final longPressTriggered = useRef(false);
+
     return Focus(
       // Passive observer — let the inner InkWell be the real focus target so
       // OK plays and Right can traverse into the download icon (a descendant).
@@ -135,6 +138,10 @@ class EpisodeCard extends HookConsumerWidget {
       skipTraversal: true,
       onFocusChange: (f) {
         isFocused.value = f;
+        if (!f) {
+          selectKeyDown.value = false;
+          longPressTriggered.value = false;
+        }
         if (f) {
           // Center the focused episode in the viewport when reachable.
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -151,120 +158,137 @@ class EpisodeCard extends HookConsumerWidget {
           });
         }
       },
-      // Reserved key bindings on a focused episode pill:
-      //   • Menu (≡) → trigger download (start / open progress / manage)
-      //   • Long-press OK (key repeat on select/enter) → same as Menu
-      //   • Right arrow (when body is focused) → focus the download icon
-      // OK / Enter / Space still play the episode (via the InkWell).
-      onKeyEvent: (node, event) {
-        final isMenu =
-            event.logicalKey == LogicalKeyboardKey.contextMenu ||
-            event.logicalKey == LogicalKeyboardKey.f10;
-        if (event is KeyDownEvent && isMenu) {
-          triggerDownload();
-          return KeyEventResult.handled;
-        }
-        if (event is KeyRepeatEvent &&
-            (event.logicalKey == LogicalKeyboardKey.select ||
-                event.logicalKey == LogicalKeyboardKey.enter)) {
-          triggerDownload();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: InkWell(
+      child: Focus(
         focusNode: bodyFocusNode,
-        onTap: () => ref
-            .read(detailsControllerProvider(parentItem.url).notifier)
-            .handlePlayPress(context, parentItem, specificEpisode: episode),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: width,
-          decoration: BoxDecoration(
-            color: isFocused.value
-                ? primary.withValues(alpha: 0.18)
-                : Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12.0),
-            border: Border.all(
+        onKeyEvent: (node, event) {
+          // Menu key → trigger download immediately.
+          final isMenu =
+              event.logicalKey == LogicalKeyboardKey.contextMenu ||
+              event.logicalKey == LogicalKeyboardKey.f10;
+          if (event is KeyDownEvent && isMenu) {
+            triggerDownload();
+            return KeyEventResult.handled;
+          }
+
+          // Select / Enter / Space → long-press detection via KeyRepeatEvent.
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space) {
+            if (event is KeyDownEvent) {
+              selectKeyDown.value = true;
+              longPressTriggered.value = false;
+              return KeyEventResult.handled;
+            } else if (event is KeyRepeatEvent) {
+              if (selectKeyDown.value && !longPressTriggered.value) {
+                longPressTriggered.value = true;
+                triggerDownload();
+              }
+              return KeyEventResult.handled;
+            } else if (event is KeyUpEvent) {
+              if (selectKeyDown.value && !longPressTriggered.value) {
+                // Short press → play the episode.
+                ref
+                    .read(detailsControllerProvider(parentItem.url).notifier)
+                    .handlePlayPress(
+                      context,
+                      parentItem,
+                      specificEpisode: episode,
+                    );
+              }
+              selectKeyDown.value = false;
+              longPressTriggered.value = false;
+              return KeyEventResult.handled;
+            }
+          }
+
+          return KeyEventResult.ignored;
+        },
+        child: InkWell(
+          // Touch/mouse tap still plays the episode directly.
+          onTap: () => ref
+              .read(detailsControllerProvider(parentItem.url).notifier)
+              .handlePlayPress(context, parentItem, specificEpisode: episode),
+          onLongPress: triggerDownload,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: width,
+            decoration: BoxDecoration(
               color: isFocused.value
-                  ? primary
-                  : Theme.of(context).dividerColor.withValues(
-                      alpha: Theme.of(context).brightness == Brightness.dark
-                          ? 0.1
-                          : 0.5,
-                    ),
-              width: isFocused.value ? 2 : 1,
-            ),
-            boxShadow: isFocused.value
-                ? [
-                    BoxShadow(
-                      color: primary.withValues(alpha: 0.45),
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
-          clipBehavior: Clip.antiAlias,
-          padding: const EdgeInsets.all(LayoutConstants.spacingSm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildThumbnail(context, progress, statusBadge),
-                  const SizedBox(width: LayoutConstants.spacingMd),
-                  Expanded(
-                    child: Text(
-                      "${episode.episode}. ${episode.name.toUpperCase()}",
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
+                  ? primary.withValues(alpha: 0.18)
+                  : Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12.0),
+              border: Border.all(
+                color: isFocused.value
+                    ? primary
+                    : Theme.of(context).dividerColor.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark
+                            ? 0.1
+                            : 0.5,
                       ),
-                      maxLines: 2,
+                width: isFocused.value ? 2 : 1,
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            padding: const EdgeInsets.all(LayoutConstants.spacingSm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildThumbnail(context, progress, statusBadge),
+                    const SizedBox(width: LayoutConstants.spacingMd),
+                    Expanded(
+                      child: Text(
+                        "${episode.episode}. ${episode.name.toUpperCase()}",
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: LayoutConstants.spacingXs),
+                    // Download icon — uses an explicit FocusNode so the parent
+                    // onKeyEvent can force focus here from the body. Left from
+                    // the icon returns focus to the body via this widget's own
+                    // onKeyEvent.
+                    _buildActionButtons(
+                      context,
+                      ref,
+                      downloadedFile,
+                      isDownloading,
+                      downloadProgress,
+                      downloadProgressData,
+                      details,
+                      downloadFocusNode,
+                      bodyFocusNode,
+                    ),
+                  ],
+                ),
+                if (episode.description != null &&
+                    episode.description!.isNotEmpty) ...[
+                  const SizedBox(height: LayoutConstants.spacingSm),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Text(
+                      episode.description!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+                        height: 1.4,
+                      ),
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: LayoutConstants.spacingXs),
-                  // Download icon — uses an explicit FocusNode so the parent
-                  // onKeyEvent can force focus here from the body. Left from
-                  // the icon returns focus to the body via this widget's own
-                  // onKeyEvent.
-                  _buildActionButtons(
-                    context,
-                    ref,
-                    downloadedFile,
-                    isDownloading,
-                    downloadProgress,
-                    downloadProgressData,
-                    details,
-                    downloadFocusNode,
-                    bodyFocusNode,
-                  ),
                 ],
-              ),
-              if (episode.description != null &&
-                  episode.description!.isNotEmpty) ...[
-                const SizedBox(height: LayoutConstants.spacingSm),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: Text(
-                    episode.description!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
-                      height: 1.4,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -538,15 +562,6 @@ class _FocusableActionWrapperState extends State<_FocusableActionWrapper> {
             color: _focused ? primary : Colors.transparent,
             width: 2,
           ),
-          boxShadow: _focused
-              ? [
-                  BoxShadow(
-                    color: primary.withValues(alpha: 0.5),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
         ),
         child: widget.child,
       ),

@@ -1069,18 +1069,21 @@ class SkyStreamPlayerControlsState
   }
 
   Widget _buildLockedUI() {
-    return IgnorePointer(
-      ignoring: !_isVisible,
-      child: AnimatedOpacity(
-        opacity: _isVisible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 180),
-        child: Center(
-          child: _buildActionButton(
-            icon: Icons.lock,
-            label: AppLocalizations.of(context)!.unlock,
-            onTap: _toggleLock,
-            rotate: false,
-            highlight: false,
+    return ExcludeFocus(
+      excluding: !_isVisible,
+      child: IgnorePointer(
+        ignoring: !_isVisible,
+        child: AnimatedOpacity(
+          opacity: _isVisible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 180),
+          child: Center(
+            child: _buildActionButton(
+              icon: Icons.lock,
+              label: AppLocalizations.of(context)!.unlock,
+              onTap: _toggleLock,
+              rotate: false,
+              highlight: false,
+            ),
           ),
         ),
       ),
@@ -1100,7 +1103,14 @@ class SkyStreamPlayerControlsState
     required double playbackSpeed,
     required double maxPlaybackSpeed,
   }) {
-    return AnimatedOpacity(
+    // ExcludeFocus when hidden: stale focus on (e.g.) the zoom button or
+    // a bottom-row action shouldn't intercept D-pad keys after the
+    // controls auto-hide. With this, all key events flow up to the
+    // PlayerScreen root handler instead, which then shows controls and
+    // refocuses the play button. Fixes Bugs 3 + 4.
+    return ExcludeFocus(
+      excluding: !_isVisible,
+      child: AnimatedOpacity(
       opacity: _isVisible ? 1.0 : 0.0,
       duration: _animDuration,
       child: IgnorePointer(
@@ -1264,24 +1274,32 @@ class SkyStreamPlayerControlsState
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    FocusTraversalOrder(
-                                      order: const NumericFocusOrder(0),
-                                      child: _buildActionButton(
-                                        icon: _isLocked
-                                            ? Icons.lock
-                                            : Icons.lock_open,
-                                        label: _isLocked
-                                            ? AppLocalizations.of(
-                                                context,
-                                              )!.unlock
-                                            : AppLocalizations.of(
-                                                context,
-                                              )!.lock,
-                                        onTap: _toggleLock,
-                                        highlight: _isLocked,
-                                        focusNode: _firstActionFocusNode,
+                                    // Lock is only meaningful for touch
+                                    // devices (guards against accidental
+                                    // taps on bezel/edge). TV remote has
+                                    // no equivalent risk and once locked
+                                    // on TV the unlock UI is hard to
+                                    // reach via D-pad — hide the button
+                                    // entirely on TV (Bug 5).
+                                    if (!_isTv)
+                                      FocusTraversalOrder(
+                                        order: const NumericFocusOrder(0),
+                                        child: _buildActionButton(
+                                          icon: _isLocked
+                                              ? Icons.lock
+                                              : Icons.lock_open,
+                                          label: _isLocked
+                                              ? AppLocalizations.of(
+                                                  context,
+                                                )!.unlock
+                                              : AppLocalizations.of(
+                                                  context,
+                                                )!.lock,
+                                          onTap: _toggleLock,
+                                          highlight: _isLocked,
+                                          focusNode: _firstActionFocusNode,
+                                        ),
                                       ),
-                                    ),
                                     FocusTraversalOrder(
                                       order: const NumericFocusOrder(1),
                                       child: _buildActionButton(
@@ -1289,6 +1307,15 @@ class SkyStreamPlayerControlsState
                                         label: AppLocalizations.of(
                                           context,
                                         )!.sources,
+                                        // On TV the lock button isn't
+                                        // rendered, so Sources is the
+                                        // first action — adopt the
+                                        // _firstActionFocusNode so D-pad
+                                        // Down from play still lands on
+                                        // the first visible button.
+                                        focusNode: _isTv
+                                            ? _firstActionFocusNode
+                                            : null,
                                         onTap: () =>
                                             PlayerBottomSheets.showSourceSelection(
                                               context: context,
@@ -1340,7 +1367,10 @@ class SkyStreamPlayerControlsState
                                                       playerControllerProvider
                                                           .notifier,
                                                     )
-                                                    .setPlaybackSpeed(s),
+                                                    .setPlaybackSpeed(
+                                                      s,
+                                                      persist: true,
+                                                    ),
                                               ),
                                         ),
                                       ),
@@ -1434,6 +1464,7 @@ class SkyStreamPlayerControlsState
             ),
           ],
         ),
+      ),
       ),
     );
   }

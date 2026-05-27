@@ -441,9 +441,43 @@ class PlayerController extends Notifier<PlayerState> {
   Duration? _lastPosition;
   DateTime? _lastPositionUpdateTime;
   bool _isRecoveringFromStall = false;
+  // Backstop timer for the stall-recovery flag. Primary path: clear the
+  // flag in `_endStallRecovery()` immediately after `changeStream(...)`
+  // completes. Backstop fires only if changeStream hangs longer than 10 s.
+  // Without this, the flag was solely time-based — chained errors firing
+  // at 9-s intervals would silently skip every other reconnect attempt
+  // because the guard at the call sites bailed without scheduling a new
+  // recovery (H-PLAYER-2).
+  Timer? _stallRecoveryGuardTimer;
 
   final List<DateTime> _bufferDepletionTimes = [];
   Timer? _stallTimer;
+  // Hide-debounce for the buffering overlay. Without this, a 250-350 ms
+  // network blip would show the overlay (300 ms past the show-debounce)
+  // then immediately hide it the moment buffering ends — visible flicker
+  // (H-PLAYER-6). Keeping the overlay up for an extra ~200 ms after
+  // buffering ends absorbs sub-second re-buffers without strobing.
+  Timer? _bufferingHideTimer;
+
+  /// Set [_isRecoveringFromStall] true, schedule a 10 s backstop clear,
+  /// and run [perform]. If [perform] returns a Future, the flag clears as
+  /// soon as the future completes (so a quick recovery doesn't block the
+  /// next legitimate retry for 10 s). The backstop only fires if perform
+  /// hangs (rare, but possible if changeStream gets wedged on a dead host).
+  void _beginStallRecovery({Future<void>? perform}) {
+    _isRecoveringFromStall = true;
+    _stallRecoveryGuardTimer?.cancel();
+    _stallRecoveryGuardTimer = Timer(const Duration(seconds: 10), () {
+      _isRecoveringFromStall = false;
+    });
+    if (perform != null) {
+      perform.whenComplete(() {
+        _stallRecoveryGuardTimer?.cancel();
+        _stallRecoveryGuardTimer = null;
+        _isRecoveringFromStall = false;
+      });
+    }
+  }
   int? _pendingResumeSeekPosition;
   double? _pendingResumeSeekPercentage;
   bool _isApplyingPendingResumeSeek = false;
@@ -778,6 +812,15 @@ class PlayerController extends Notifier<PlayerState> {
     await _initStream();
     if (_isDisposed) return;
     await applySubtitleSettings();
+
+    // Restore the persisted default playback speed for this session.
+    // Skipped at 1.0× (engine default — no-op) and on live streams (rate
+    // changes on a live source are usually ignored / fight back).
+    final settings = ref.read(playerSettingsProvider).asData?.value;
+    final defaultSpeed = settings?.defaultPlaybackSpeed ?? 1.0;
+    if (defaultSpeed != 1.0 && !state.isLive) {
+      await setPlaybackSpeed(defaultSpeed);
+    }
   }
 
   Future<void> _fetchAndLogSkipSegments() async {
@@ -962,8 +1005,13 @@ class PlayerController extends Notifier<PlayerState> {
       final isLoading = _videoViewController!.loading.value;
       if (isLoading) {
         _handleBufferStall();
+        // Buffering started — cancel any pending HIDE (we're back in
+        // buffering state, the overlay should stay/come up). Schedule the
+        // SHOW debounce; 400 ms swallows sub-half-second blips without
+        // flashing the overlay (H-PLAYER-6).
+        _bufferingHideTimer?.cancel();
         _stallTimer?.cancel();
-        _stallTimer = Timer(const Duration(milliseconds: 200), () {
+        _stallTimer = Timer(const Duration(milliseconds: 400), () {
           if (_hasConfirmedPlaybackFrame) {
             _enterRuntimePhase(
               kind: PlaybackUiPhaseKind.bufferingRuntime,
@@ -987,10 +1035,19 @@ class PlayerController extends Notifier<PlayerState> {
           }
         });
       } else {
+        // Buffering ended — cancel the show timer first (in case the blip
+        // ended within the 400 ms window, never show the overlay at all).
         _stallTimer?.cancel();
+        // Then defer the hide by 200 ms so a rapid re-buffer doesn't
+        // strobe the overlay off→on→off.
         if (_hasConfirmedPlaybackFrame &&
             state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
-          _setIdlePhase();
+          _bufferingHideTimer?.cancel();
+          _bufferingHideTimer = Timer(const Duration(milliseconds: 200), () {
+            if (state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
+              _setIdlePhase();
+            }
+          });
         }
       }
     });
@@ -1026,15 +1083,16 @@ class PlayerController extends Notifier<PlayerState> {
                 "VideoView live stream error. Triggering reconnect...",
               );
             }
-            _isRecoveringFromStall = true;
             _enterRuntimePhase(
               kind: PlaybackUiPhaseKind.reconnectingLive,
               detail: "Reconnecting to live stream...",
             );
-            unawaited(changeStream(state.currentStream!, resetPosition: true));
-            Future.delayed(const Duration(seconds: 10), () {
-              _isRecoveringFromStall = false;
-            });
+            _beginStallRecovery(
+              perform: changeStream(
+                state.currentStream!,
+                resetPosition: true,
+              ),
+            );
             return;
           }
           _markSourceAttempt(
@@ -1055,6 +1113,14 @@ class PlayerController extends Notifier<PlayerState> {
           VideoControllerPlaybackState.playing;
       if (!playing) {
         saveProgress();
+        // Bug 2 (ExoPlayer branch): clear buffering overlay on pause.
+        // See media_kit branch in _setupEventDrivenProgressSaving for
+        // rationale.
+        _stallTimer?.cancel();
+        _bufferingHideTimer?.cancel();
+        if (state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
+          _setIdlePhase();
+        }
       } else {
         // Do NOT call _confirmPlaybackStarted() here — ExoPlayer/AVPlayer fires
         // playbackState=playing when it starts buffering, before any frames arrive.
@@ -1146,7 +1212,14 @@ class PlayerController extends Notifier<PlayerState> {
     _durationSub?.cancel();
     _durationSub = _player.stream.duration.listen((duration) {
       if (duration > Duration.zero) {
-        if (_pendingResumeSeekPosition != null) {
+        // Retry whenever either pending field is set. The percentage-only
+        // path (Trakt/Simkl synced progress) needs the duration to compute
+        // the absolute ms; if the user taps Resume before duration arrives,
+        // _flushPendingResumeSeek early-returns with the pending pct still
+        // set. Without this check, the resume silently dropped — the user
+        // saw playback start from 0 even though they tapped "Resume".
+        if (_pendingResumeSeekPosition != null ||
+            _pendingResumeSeekPercentage != null) {
           unawaited(_flushPendingResumeSeek());
         }
         // Safe point to re-enable next-episode detection: the new episode's
@@ -1172,8 +1245,11 @@ class PlayerController extends Notifier<PlayerState> {
     _bufferingSub = _player.stream.buffering.listen((isBuffering) {
       if (isBuffering) {
         _handleBufferStall();
+        // Cancel pending hide and arm the show debounce. See ExoPlayer
+        // branch comment above for the 400 ms / 200 ms rationale.
+        _bufferingHideTimer?.cancel();
         _stallTimer?.cancel();
-        _stallTimer = Timer(const Duration(milliseconds: 200), () {
+        _stallTimer = Timer(const Duration(milliseconds: 400), () {
           if (_hasConfirmedPlaybackFrame) {
             _enterRuntimePhase(
               kind: PlaybackUiPhaseKind.bufferingRuntime,
@@ -1200,7 +1276,12 @@ class PlayerController extends Notifier<PlayerState> {
         _stallTimer?.cancel();
         if (_hasConfirmedPlaybackFrame &&
             state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
-          _setIdlePhase();
+          _bufferingHideTimer?.cancel();
+          _bufferingHideTimer = Timer(const Duration(milliseconds: 200), () {
+            if (state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
+              _setIdlePhase();
+            }
+          });
         }
       }
     });
@@ -1370,15 +1451,16 @@ class PlayerController extends Notifier<PlayerState> {
           if (kDebugMode) {
             debugPrint("Live stream error. Triggering reconnect...");
           }
-          _isRecoveringFromStall = true;
           _enterRuntimePhase(
             kind: PlaybackUiPhaseKind.reconnectingLive,
             detail: "Reconnecting to live stream...",
           );
-          unawaited(changeStream(state.currentStream!, resetPosition: true));
-          Future.delayed(const Duration(seconds: 10), () {
-            _isRecoveringFromStall = false;
-          });
+          _beginStallRecovery(
+            perform: changeStream(
+              state.currentStream!,
+              resetPosition: true,
+            ),
+          );
           return;
         }
         _markSourceAttempt(
@@ -1407,6 +1489,17 @@ class PlayerController extends Notifier<PlayerState> {
         saveProgress();
         _torrentPollTimer?.cancel();
         _torrentPollTimer = null;
+        // Bug 2: clear any in-flight buffering overlay when the user
+        // pauses. Without this, "seek → buffering starts → user pauses
+        // before buffer fills" leaves the spinner stuck on top of a
+        // paused video forever. The spinner is meaningful for an active
+        // playback stall, not for an intentional pause — the next seek/
+        // play will arm it again if needed.
+        _stallTimer?.cancel();
+        _bufferingHideTimer?.cancel();
+        if (state.uiPhase.kind == PlaybackUiPhaseKind.bufferingRuntime) {
+          _setIdlePhase();
+        }
       } else {
         // Do NOT call _confirmPlaybackStarted() here — media_kit fires
         // playing=true as soon as open() is called, before any frames arrive.
@@ -1458,21 +1551,22 @@ class PlayerController extends Notifier<PlayerState> {
                 "Watchdog: Silent stall detected (5s). Kicking engine...",
               );
             }
-            _isRecoveringFromStall = true;
 
             // Recovery: reconnect live streams from scratch; kick VOD.
+            // For live we hand changeStream to the recovery helper so the
+            // flag clears the instant the reconnect resolves. For VOD,
+            // _player.play() is sync — fall back to the time-based backstop.
             if (state.isLive && state.currentStream != null) {
-              unawaited(
-                changeStream(state.currentStream!, resetPosition: true),
+              _beginStallRecovery(
+                perform: changeStream(
+                  state.currentStream!,
+                  resetPosition: true,
+                ),
               );
             } else {
+              _beginStallRecovery();
               _player.play();
             }
-
-            // prevent multi-trigger
-            Future.delayed(const Duration(seconds: 10), () {
-              _isRecoveringFromStall = false;
-            });
           }
         } else {
           _lastPosition = pos;
@@ -1540,6 +1634,16 @@ class PlayerController extends Notifier<PlayerState> {
         PlaybackUiPhaseKind.fetchingSources,
     bool forceNewSourceSession = true,
   }) async {
+    // Any stream-level transition (new episode, source retry, manual
+    // quality switch) should re-arm the next-episode overlay. Without
+    // this, a dismiss near end-of-episode followed by a source retry
+    // (which preserves position) leaves the overlay suppressed for the
+    // remainder of that episode — the user has no way to advance until
+    // playback naturally completes (H-PLAYER-7). The position listener
+    // self-heals once `remainingSecs > 15`, but inside the narrow
+    // last-15s window during a retry it would otherwise stay stuck.
+    _nextEpisodeOverlayDismissedForCurrentEnding = false;
+
     final sourceSessionId = forceNewSourceSession
         ? _beginSourceSession(resetAttempts: true)
         : state.sourceSessionId;
@@ -2495,7 +2599,14 @@ class PlayerController extends Notifier<PlayerState> {
         debugPrint("Failed to load synced progress: $e");
       }
 
-      if (savedPos > 0 && syncedPct != null) {
+      // Don't prompt for trivial sync progress. A user who watched 5 seconds
+      // of a 2-hour movie on another device gets a "Synced progress: 0%"
+      // dialog with no way to choose Start Over — accidental taps Resume
+      // the playback back to where they barely started. 5% mirrors the
+      // local saveProgress write threshold.
+      final hasMeaningfulSync = syncedPct != null && syncedPct >= 5.0;
+
+      if (savedPos > 0 && hasMeaningfulSync) {
         if (syncedTimestamp > localTimestamp) {
           state = state.copyWith(resumePromptPercentage: syncedPct);
         } else {
@@ -2503,7 +2614,7 @@ class PlayerController extends Notifier<PlayerState> {
         }
       } else if (savedPos > 0) {
         state = state.copyWith(resumePromptPosition: savedPos);
-      } else if (syncedPct != null) {
+      } else if (hasMeaningfulSync) {
         state = state.copyWith(resumePromptPercentage: syncedPct);
       }
     } catch (e) {
@@ -3171,6 +3282,10 @@ class PlayerController extends Notifier<PlayerState> {
     _torrentPollTimer = null;
     _stallTimer?.cancel();
     _stallTimer = null;
+    _bufferingHideTimer?.cancel();
+    _bufferingHideTimer = null;
+    _stallRecoveryGuardTimer?.cancel();
+    _stallRecoveryGuardTimer = null;
 
     _videoParamsSub?.cancel();
     _errorSub?.cancel();
@@ -3997,17 +4112,28 @@ class PlayerController extends Notifier<PlayerState> {
     }
   }
 
-  Future<void> setPlaybackSpeed(double rate) async {
+  /// [persist] = true marks this as a user-driven speed change that should
+  /// be remembered for the next playback session. Transient sites — the
+  /// space-hold 2× boost and its revert — pass false so a momentary
+  /// long-press doesn't permanently change the user's default speed.
+  Future<void> setPlaybackSpeed(double rate, {bool persist = false}) async {
     final appliedRate = rate.clamp(0.5, state.maxPlaybackSpeed);
 
     if (state.useExoPlayer && _videoViewController != null) {
       _videoViewController!.setSpeed(appliedRate);
       state = state.copyWith(playbackSpeed: appliedRate);
-      return;
+    } else {
+      await _player.setRate(appliedRate);
+      state = state.copyWith(playbackSpeed: appliedRate);
     }
 
-    await _player.setRate(appliedRate);
-    state = state.copyWith(playbackSpeed: appliedRate);
+    if (persist) {
+      unawaited(
+        ref
+            .read(playerSettingsProvider.notifier)
+            .setDefaultPlaybackSpeed(appliedRate),
+      );
+    }
   }
 
   Future<void> setSubtitleDelay(double seconds) async {

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:skystream/features/library/presentation/history_provider.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
-import 'package:skystream/shared/widgets/focusable_item.dart';
+import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:skystream/core/router/app_router.dart';
@@ -103,7 +103,7 @@ class ContinueWatchingCard extends ConsumerWidget {
         : null;
     final providerName = providerObj?.name ?? item.provider;
 
-    return FocusableItem(
+    return CardsWrapper(
       onTap: () async {
         if (item.contentType == MultimediaContentType.livestream) {
           bool dialogDismissed = false;
@@ -413,6 +413,7 @@ class ContinueWatchingCard extends ConsumerWidget {
               color: Colors.black.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
+                focusNode: FocusNode(canRequestFocus: false, skipTraversal: true),
                 borderRadius: BorderRadius.circular(12),
                 onTap: () {
                   ref

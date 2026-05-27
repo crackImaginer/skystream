@@ -112,8 +112,14 @@ class IntroDbService implements SkipService {
         addSegment('recap', SkipType.recap);
         addSegment('outro', SkipType.outro);
 
-        _store(key, segments);
-        return segments;
+        // Sanitize before caching — IntroDB occasionally returns
+        // zero-length or out-of-range entries.
+        final cleaned = SkipSegment.sanitize(
+          segments,
+          durationSec: duration?.toDouble(),
+        );
+        _store(key, cleaned);
+        return cleaned;
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 429) {

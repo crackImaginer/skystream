@@ -299,7 +299,7 @@ class CustomButton extends StatefulWidget {
     this.focusNode,
     this.backgroundColor,
     this.shape,
-    this.showFocusHighlight = false,
+    this.showFocusHighlight = true,
   });
 
   @override
@@ -345,6 +345,9 @@ class _CustomButtonState extends State<CustomButton> {
     // "elevation" cue regardless of their fill color. Useful on TV where blue
     // and grey buttons can otherwise look identical to non-focused.
     final scale = showHighlight ? 1.04 : 1.0;
+    // Reserved for an upcoming focus-glow treatment — keep so the value is
+    // resolved in one spot when the glow ships.
+    // ignore: unused_local_variable
     final glowColor = primaryColor;
 
     Widget core;
@@ -366,9 +369,9 @@ class _CustomButtonState extends State<CustomButton> {
           disabledForegroundColor: Theme.of(
             context,
           ).colorScheme.onSurface.withValues(alpha: 0.38),
-          side: showHighlight
-              ? const BorderSide(color: Colors.white, width: 3)
-              : BorderSide.none,
+          // No inner side on focus — the outer accent ring (below) is the
+          // focus indicator. Mixing both produced double rings.
+          side: BorderSide.none,
           shadowColor: Colors.transparent,
           shape: widget.shape,
         ),
@@ -386,22 +389,51 @@ class _CustomButtonState extends State<CustomButton> {
               ? primaryColor.withValues(alpha: 0.28)
               : null,
           foregroundColor: _isFocused
-              ? Theme.of(context).colorScheme.onPrimary
+              ? Theme.of(context).colorScheme.onSurface
               : Theme.of(context).colorScheme.onSurfaceVariant,
           disabledForegroundColor: Theme.of(
             context,
           ).colorScheme.onSurface.withValues(alpha: 0.38),
-          side: showHighlight
-              ? const BorderSide(color: Colors.white, width: 3)
-              : (widget.isOutlined
-                    ? BorderSide(color: Theme.of(context).colorScheme.outline)
-                    : BorderSide.none),
+          side: widget.isOutlined
+              ? BorderSide(color: Theme.of(context).colorScheme.outline)
+              : BorderSide.none,
           shape: widget.shape,
         ),
         child: widget.child,
       );
     }
 
+    // Outer focus ring — accent border + accent glow + scale.
+    // Standardized across CustomButton + PlayerActionButton so play/pause,
+    // seek, top utility, and bottom-action buttons all share the same
+    // focused appearance on TV/keyboard.
+    //
+    // Geometry mirrors the inner button's shape so the ring traces the
+    // button instead of drawing a rounded rectangle around a pill or a
+    // square around a circle (previous bug).
+    final shape = widget.shape;
+    final BoxShape outerShape;
+    final BorderRadius? outerBorderRadius;
+    if (shape is CircleBorder) {
+      outerShape = BoxShape.circle;
+      outerBorderRadius = null;
+    } else if (shape is StadiumBorder) {
+      // Stadium = pill = full-height radius. 999 is overkill but Flutter
+      // clamps it to the half-height at paint time, so it always looks
+      // perfectly pill-shaped regardless of size.
+      outerShape = BoxShape.rectangle;
+      outerBorderRadius = BorderRadius.circular(999);
+    } else if (shape is RoundedRectangleBorder) {
+      outerShape = BoxShape.rectangle;
+      final inner = shape.borderRadius;
+      outerBorderRadius = inner is BorderRadius
+          ? inner
+          : BorderRadius.circular(12);
+    } else {
+      // Unknown shape — fall back to the default rounded rectangle.
+      outerShape = BoxShape.rectangle;
+      outerBorderRadius = BorderRadius.circular(12);
+    }
     return AnimatedScale(
       duration: const Duration(milliseconds: 150),
       curve: Curves.easeOut,
@@ -409,12 +441,16 @@ class _CustomButtonState extends State<CustomButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          shape: outerShape,
+          borderRadius: outerBorderRadius,
+          border: showHighlight
+              ? Border.all(color: primaryColor, width: 2)
+              : null,
           boxShadow: showHighlight
               ? [
                   BoxShadow(
-                    color: glowColor.withValues(alpha: 0.55),
-                    blurRadius: 16,
+                    color: primaryColor.withValues(alpha: 0.55),
+                    blurRadius: 14,
                     spreadRadius: 1,
                   ),
                 ]

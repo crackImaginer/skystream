@@ -268,7 +268,10 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
             _pressed = false;
           }),
           child: AnimatedScale(
-            scale: showTvFocusRing ? 1.06 : 1.0,
+            // Match CustomButton's TV-focus scale so play/pause + seek +
+            // top-utility + bottom-action buttons all "lift" by the same
+            // amount on focus (Bug 1 — visual consistency).
+            scale: showTvFocusRing ? 1.04 : 1.0,
             duration: HotstarPlayerStyle.fastMotionDuration,
             child: Material(
               color: Colors.transparent,

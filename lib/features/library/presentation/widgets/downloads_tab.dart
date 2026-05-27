@@ -13,11 +13,21 @@ import '../downloads_provider.dart';
 import '../../../../l10n/generated/app_localizations.dart';
 import '../../../../core/services/notification_service.dart';
 
-class DownloadsTab extends ConsumerWidget {
+class DownloadsTab extends ConsumerStatefulWidget {
   const DownloadsTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DownloadsTab> createState() => _DownloadsTabState();
+}
+
+class _DownloadsTabState extends ConsumerState<DownloadsTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     final downloadsAsync = ref.watch(downloadsProvider);
     final activeProgress = ref.watch(downloadProgressProvider);
     final l10n = AppLocalizations.of(context)!;

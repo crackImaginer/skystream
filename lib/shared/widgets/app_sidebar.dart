@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dpad/dpad.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'package:skystream/core/utils/layout_constants.dart';
 import 'package:skystream/core/utils/responsive_breakpoints.dart';
@@ -245,86 +246,93 @@ class _SidebarItemState extends State<_SidebarItem> {
     final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
     final isActive = widget.isSelected || _isFocused;
 
-    return Focus(
-      autofocus: widget.autofocus,
-      focusNode: widget.focusNode,
-      onFocusChange: (focused) => setState(() => _isFocused = focused),
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.select ||
-              event.logicalKey == LogicalKeyboardKey.enter) {
-            widget.onTap();
-            return KeyEventResult.handled;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
+      child: Focus(
+        autofocus: widget.autofocus,
+        focusNode: widget.focusNode,
+        onFocusChange: (focused) => setState(() => _isFocused = focused),
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter) {
+              widget.onTap();
+              return KeyEventResult.handled;
+            }
           }
-        }
-        return KeyEventResult.ignored;
-      },
-      child: GestureDetector(
-        onTap: () {
-          widget.focusNode.requestFocus();
-          widget.onTap();
+          return KeyEventResult.ignored;
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: widget.isSelected
-                ? primary.withValues(alpha: 0.1)
-                : Colors.transparent,
-            border: _isFocused ? Border.all(color: primary, width: 2) : null,
-            boxShadow: _isFocused
-                ? [
-                    BoxShadow(
-                      color: primary.withValues(alpha: 0.4),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: widget.isExpanded
-                ? MainAxisAlignment.start
-                : MainAxisAlignment.center,
-            children: [
-              // Active pill indicator (only when expanded, or adjust if you want it collapsed too)
-              if (widget.isExpanded)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 4,
-                  height: widget.isSelected ? 24 : 0,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: widget.isSelected ? primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+        child: Builder(
+          builder: (context) {
+            final innerContent = GestureDetector(
+              onTap: () {
+                widget.focusNode.requestFocus();
+                widget.onTap();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 12,
                 ),
-              Icon(
-                widget.icon,
-                color: isActive ? primary : onSurfaceVariant,
-                size: widget.isExpanded ? 28 : 24,
-              ),
-              if (widget.isExpanded) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    widget.label,
-                    style: TextStyle(
-                      fontSize: 15,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: widget.isSelected
+                      ? primary.withValues(alpha: 0.1)
+                      : Colors.transparent,
+                ),
+                child: Row(
+                  mainAxisAlignment: widget.isExpanded
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    // Active pill indicator (only when expanded, or adjust if you want it collapsed too)
+                    if (widget.isExpanded)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 4,
+                        height: widget.isSelected ? 24 : 0,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: widget.isSelected
+                              ? primary
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    Icon(
+                      widget.icon,
                       color: isActive ? primary : onSurfaceVariant,
-                      fontWeight: widget.isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      size: widget.isExpanded ? 28 : 24,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                  ),
+                    if (widget.isExpanded) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.label,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: isActive ? primary : onSurfaceVariant,
+                            fontWeight: widget.isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+            );
+
+            // Apply the dpad package's border effect instead of glow
+            return FocusEffects.border(
+              focusColor: primary,
+              borderRadius: BorderRadius.circular(12),
+            )(context, _isFocused, innerContent);
+          },
         ),
       ),
     );

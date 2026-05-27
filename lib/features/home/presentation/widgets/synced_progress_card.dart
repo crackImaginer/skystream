@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:skystream/features/tracking/domain/sync_progress_item.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:skystream/core/domain/entity/multimedia_item.dart';
-import 'package:skystream/shared/widgets/focusable_item.dart';
+import 'package:skystream/shared/widgets/cards_wrapper.dart';
 import 'package:skystream/shared/widgets/thumbnail_error_placeholder.dart';
 import 'package:skystream/core/utils/image_fallbacks.dart';
 
@@ -27,8 +27,56 @@ class SyncedProgressCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return FocusableItem(
+    return CardsWrapper(
       onTap: onTap,
+      onLongPress: () {
+        showModalBottomSheet<void>(
+          context: context,
+          builder: (context) => Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.title, style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    AppLocalizations.of(context)!.removeFromHistory,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  onTap: () async {
+                    final manager = ref.read(syncManagerProvider);
+                    final success = await manager.removePlaybackProgress(item);
+                    if (success && context.mounted) {
+                      ref.invalidate(syncedProgressProvider);
+                      ref
+                          .read(notificationServiceProvider)
+                          .showSuccess(
+                            AppLocalizations.of(
+                              context,
+                            )!.removedFromHistory(item.title),
+                          );
+                    }
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text(AppLocalizations.of(context)!.cancel),
+                  onTap: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
       borderRadius: BorderRadius.circular(12),
       child: Stack(
         children: [
@@ -50,7 +98,8 @@ class SyncedProgressCard extends ConsumerWidget {
                       left: Radius.circular(12),
                     ),
                     child: CachedNetworkImage(
-                      imageUrl: AppImageFallbacks.tmdbPoster(
+                      imageUrl:
+                          AppImageFallbacks.tmdbPoster(
                             item.posterUrl,
                             label: item.title,
                           ) ??
@@ -103,14 +152,18 @@ class SyncedProgressCard extends ConsumerWidget {
                                   Icon(
                                     Icons.cloud_sync,
                                     size: 10,
-                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
                                     "SYNCED",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -164,7 +217,10 @@ class SyncedProgressCard extends ConsumerWidget {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
-                            value: (item.progressPercentage / 100.0).clamp(0.0, 1.0),
+                            value: (item.progressPercentage / 100.0).clamp(
+                              0.0,
+                              1.0,
+                            ),
                             minHeight: 4,
                             backgroundColor: Theme.of(
                               context,
@@ -197,15 +253,23 @@ class SyncedProgressCard extends ConsumerWidget {
                 color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
+                  focusNode: FocusNode(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   onTap: () async {
                     final manager = ref.read(syncManagerProvider);
                     final success = await manager.removePlaybackProgress(item);
                     if (success && context.mounted) {
                       ref.invalidate(syncedProgressProvider);
-                      ref.read(notificationServiceProvider).showSuccess(
-                        AppLocalizations.of(context)!.removedFromHistory(item.title)
-                      );
+                      ref
+                          .read(notificationServiceProvider)
+                          .showSuccess(
+                            AppLocalizations.of(
+                              context,
+                            )!.removedFromHistory(item.title),
+                          );
                     }
                   },
                   child: const Padding(

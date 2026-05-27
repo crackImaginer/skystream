@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 class CardsWrapper extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final double scaleFactor;
   final bool autoFocus;
   final BorderRadius? borderRadius;
@@ -13,6 +14,7 @@ class CardsWrapper extends StatefulWidget {
     super.key,
     required this.child,
     required this.onTap,
+    this.onLongPress,
     this.scaleFactor = 1.03,
     this.autoFocus = false,
     this.borderRadius,
@@ -33,6 +35,12 @@ class _CardsWrapperState extends State<CardsWrapper>
   bool _isFocused = false;
   bool _isHovered = false;
   late FocusNode _node;
+
+  /// Whether the select/enter key is currently held down.
+  bool _selectKeyDown = false;
+
+  /// Set to true once the first KeyRepeatEvent fires (OS-level long press).
+  bool _longPressTriggered = false;
 
   @override
   void initState() {
@@ -89,6 +97,10 @@ class _CardsWrapperState extends State<CardsWrapper>
   }
 
   void _onFocusChange(bool hasFocus) {
+    if (!hasFocus) {
+      _selectKeyDown = false;
+      _longPressTriggered = false;
+    }
     setState(() {
       _isFocused = hasFocus;
     });
@@ -151,11 +163,36 @@ class _CardsWrapperState extends State<CardsWrapper>
       focusNode: _node,
       onFocusChange: _onFocusChange,
       onKeyEvent: (node, event) {
-        if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.select ||
-              event.logicalKey == LogicalKeyboardKey.enter ||
-              event.logicalKey == LogicalKeyboardKey.space) {
-            widget.onTap();
+        if (event.logicalKey == LogicalKeyboardKey.select ||
+            event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.space) {
+          if (event is KeyDownEvent) {
+            if (widget.onLongPress == null) {
+              // No long-press handler — fire tap immediately.
+              widget.onTap();
+              return KeyEventResult.handled;
+            }
+            // Start tracking the press; don't fire anything yet.
+            _selectKeyDown = true;
+            _longPressTriggered = false;
+            return KeyEventResult.handled;
+          } else if (event is KeyRepeatEvent) {
+            // The OS fires KeyRepeatEvent after the platform key-repeat
+            // delay (~500 ms). Treat the first repeat as a long press.
+            if (_selectKeyDown &&
+                !_longPressTriggered &&
+                widget.onLongPress != null) {
+              _longPressTriggered = true;
+              widget.onLongPress!();
+            }
+            return KeyEventResult.handled;
+          } else if (event is KeyUpEvent) {
+            // Short press: no repeat was received before release → tap.
+            if (_selectKeyDown && !_longPressTriggered) {
+              widget.onTap();
+            }
+            _selectKeyDown = false;
+            _longPressTriggered = false;
             return KeyEventResult.handled;
           }
         }
@@ -166,6 +203,7 @@ class _CardsWrapperState extends State<CardsWrapper>
         onExit: (_) => _onHover(false),
         child: GestureDetector(
           onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
           child: Builder(
             builder: (context) {
               final card = Container(

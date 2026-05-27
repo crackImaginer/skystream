@@ -47,6 +47,12 @@ class PlayerSettings {
   /// want it always.
   final bool showRemainingTime;
 
+  /// Default playback speed restored on every new playback session.
+  /// 1.0 = normal. Stored as a double to support fractional values
+  /// (1.25, 1.5, 1.75, 2.0). Capped at the engine's supported range
+  /// at playback time (`maxPlaybackSpeed`).
+  final double defaultPlaybackSpeed;
+
   // Subtitle Accounts
   final String osUsername;
   final String osPassword;
@@ -74,6 +80,7 @@ class PlayerSettings {
     this.wifiQuality = QualityPreference.q4k,
     this.mobileQuality = QualityPreference.q1080,
     this.showRemainingTime = false,
+    this.defaultPlaybackSpeed = 1.0,
     this.osUsername = '',
     this.osPassword = '',
     this.osApiKey = '',
@@ -102,6 +109,7 @@ class PlayerSettings {
     QualityPreference? wifiQuality,
     QualityPreference? mobileQuality,
     bool? showRemainingTime,
+    double? defaultPlaybackSpeed,
     String? osUsername,
     String? osPassword,
     String? osApiKey,
@@ -132,6 +140,7 @@ class PlayerSettings {
       wifiQuality: wifiQuality ?? this.wifiQuality,
       mobileQuality: mobileQuality ?? this.mobileQuality,
       showRemainingTime: showRemainingTime ?? this.showRemainingTime,
+      defaultPlaybackSpeed: defaultPlaybackSpeed ?? this.defaultPlaybackSpeed,
       osUsername: osUsername ?? this.osUsername,
       osPassword: osPassword ?? this.osPassword,
       osApiKey: osApiKey ?? this.osApiKey,
@@ -226,6 +235,10 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
           defaultValue: false,
         ) ??
         false;
+    final defaultSpeed =
+        (storage.getPlayerSetting('player_default_speed') as num?)
+            ?.toDouble() ??
+        1.0;
     final osUser = storage.getPlayerSetting<String>('player_os_user') ?? '';
     final osPass = storage.getPlayerSetting<String>('player_os_pass') ?? '';
     final osKey = storage.getPlayerSetting<String>('player_os_key') ?? '';
@@ -253,6 +266,7 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
       wifiQuality: wifiQ,
       mobileQuality: mobileQ,
       showRemainingTime: showRemaining,
+      defaultPlaybackSpeed: defaultSpeed,
       osUsername: osUser,
       osPassword: osPass,
       osApiKey: osKey,
@@ -382,6 +396,13 @@ class PlayerSettingsNotifier extends _$PlayerSettingsNotifier {
   Future<void> setShowRemainingTime(bool val) async {
     await _repository.setPlayerSetting('player_show_remaining', val);
     state = AsyncData(state.requireValue.copyWith(showRemainingTime: val));
+  }
+
+  Future<void> setDefaultPlaybackSpeed(double speed) async {
+    await _repository.setPlayerSetting('player_default_speed', speed);
+    state = AsyncData(
+      state.requireValue.copyWith(defaultPlaybackSpeed: speed),
+    );
   }
 
   Future<void> setOpenSubtitlesCredentials(
