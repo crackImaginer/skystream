@@ -35,6 +35,7 @@ import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/skip_service.dart';
 import '../../tracking/data/simkl_service.dart';
+import '../../../../core/storage/settings_repository.dart';
 
 // Sentinel so copyWith can distinguish "not passed" from "explicitly null".
 const Object _keep = Object();
@@ -864,28 +865,33 @@ class PlayerController extends Notifier<PlayerState> {
     int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
     // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
-    try {
-      final introDb = ref.read(introDbServiceProvider);
-      final segments = await introDb.getSkipSegments(
-        tmdbId: state.tmdbId,
-        imdbId: state.imdbId,
-        season: season,
-        episode: episodeNum,
-      );
-      if (_isDisposed) return;
-      if (segments.isNotEmpty) {
-        allSegments.addAll(segments);
-        if (kDebugMode) {
-          debugPrint('IntroDB returned ${segments.length} segments:');
-          for (final s in segments) {
-            debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+    final settingsRepo = ref.read(settingsRepositoryProvider);
+    if (settingsRepo.isIntroDbIntegrationEnabled()) {
+      try {
+        final introDb = ref.read(introDbServiceProvider);
+        final segments = await introDb.getSkipSegments(
+          tmdbId: state.tmdbId,
+          imdbId: state.imdbId,
+          season: season,
+          episode: episodeNum,
+        );
+        if (_isDisposed) return;
+        if (segments.isNotEmpty) {
+          allSegments.addAll(segments);
+          if (kDebugMode) {
+            debugPrint('IntroDB returned ${segments.length} segments:');
+            for (final s in segments) {
+              debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+            }
           }
+        } else {
+          if (kDebugMode) debugPrint('IntroDB returned 0 segments');
         }
-      } else {
-        if (kDebugMode) debugPrint('IntroDB returned 0 segments');
+      } catch (e) {
+        if (kDebugMode) debugPrint('IntroDB error: $e');
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('IntroDB error: $e');
+    } else {
+      if (kDebugMode) debugPrint('IntroDB integration is disabled in settings.');
     }
 
     if (_isDisposed) return;
@@ -903,40 +909,44 @@ class PlayerController extends Notifier<PlayerState> {
             ));
 
     if (isAnime) {
-      try {
-        var anilistId =
-            _item.syncData?['anilist'] ??
-            _item.syncData?['anilistId'] ??
-            _item.syncData?['anilist_id'];
+      if (settingsRepo.isAnimeSkipIntegrationEnabled()) {
+        try {
+          var anilistId =
+              _item.syncData?['anilist'] ??
+              _item.syncData?['anilistId'] ??
+              _item.syncData?['anilist_id'];
 
-        if (_isDisposed) return;
-
-        if (anilistId != null) {
-          final animeSkip = ref.read(animeSkipServiceProvider);
-          final segments = await animeSkip.getSkipSegments(
-            anilistId: int.tryParse(anilistId.toString()),
-            season: season,
-            episode: episodeNum,
-          );
           if (_isDisposed) return;
-          if (segments.isNotEmpty) {
-            // AnimeSkip data is richer and more accurate for anime. Disregard IntroDB.
-            allSegments.clear();
-            allSegments.addAll(segments);
-            if (kDebugMode) {
-              debugPrint('AnimeSkip returned ${segments.length} segments:');
-              for (final s in segments) {
-                debugPrint(
-                  '  - ${s.type.name}: ${s.startTime} -> ${s.endTime}',
-                );
+
+          if (anilistId != null) {
+            final animeSkip = ref.read(animeSkipServiceProvider);
+            final segments = await animeSkip.getSkipSegments(
+              anilistId: int.tryParse(anilistId.toString()),
+              season: season,
+              episode: episodeNum,
+            );
+            if (_isDisposed) return;
+            if (segments.isNotEmpty) {
+              // AnimeSkip data is richer and more accurate for anime. Disregard IntroDB.
+              allSegments.clear();
+              allSegments.addAll(segments);
+              if (kDebugMode) {
+                debugPrint('AnimeSkip returned ${segments.length} segments:');
+                for (final s in segments) {
+                  debugPrint(
+                    '  - ${s.type.name}: ${s.startTime} -> ${s.endTime}',
+                  );
+                }
               }
+            } else {
+              if (kDebugMode) debugPrint('AnimeSkip returned 0 segments');
             }
-          } else {
-            if (kDebugMode) debugPrint('AnimeSkip returned 0 segments');
           }
+        } catch (e) {
+          if (kDebugMode) debugPrint('AnimeSkip error: $e');
         }
-      } catch (e) {
-        if (kDebugMode) debugPrint('AnimeSkip error: $e');
+      } else {
+        if (kDebugMode) debugPrint('AnimeSkip integration is disabled in settings.');
       }
     } else {
       if (kDebugMode) {

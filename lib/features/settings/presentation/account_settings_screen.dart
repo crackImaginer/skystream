@@ -17,6 +17,7 @@ import '../../tracking/data/simkl_service.dart';
 import '../../tracking/data/trakt_service.dart';
 import '../../tracking/data/mal_service.dart';
 import '../../tracking/data/anilist_service.dart';
+import '../../../core/storage/settings_repository.dart';
 
 class AccountSettingsScreen extends ConsumerWidget {
   const AccountSettingsScreen({super.key});
@@ -56,6 +57,7 @@ class AccountSettingsScreen extends ConsumerWidget {
     final playerSettings =
         ref.watch(playerSettingsProvider).asData?.value ??
         const PlayerSettings();
+    final settingsRepo = ref.watch(settingsRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.accounts)),
@@ -401,6 +403,48 @@ class AccountSettingsScreen extends ConsumerWidget {
                           ),
                         ],
                       );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: LayoutConstants.spacingLg),
+              SettingsGroup(
+                title: 'Integrations',
+                children: [
+                  SettingsTile(
+                    icon: Icons.fast_forward_rounded,
+                    title: 'AnimeSkip (Beta)',
+                    subtitle: 'Automatically fetch skip segments for Anime',
+                    trailing: Switch(
+                      value: settingsRepo.isAnimeSkipIntegrationEnabled(),
+                      onChanged: (val) {
+                        settingsRepo.setAnimeSkipIntegrationEnabled(val);
+                        // Trigger a rebuild
+                        ref.invalidate(settingsRepositoryProvider);
+                      },
+                    ),
+                    onTap: () {
+                      final current = settingsRepo.isAnimeSkipIntegrationEnabled();
+                      settingsRepo.setAnimeSkipIntegrationEnabled(!current);
+                      ref.invalidate(settingsRepositoryProvider);
+                    },
+                  ),
+                  SettingsTile(
+                    icon: Icons.fast_forward_rounded,
+                    title: 'IntroDB (Beta)',
+                    subtitle: 'Automatically fetch skip segments for TV Shows',
+                    isLast: true,
+                    trailing: Switch(
+                      value: settingsRepo.isIntroDbIntegrationEnabled(),
+                      onChanged: (val) {
+                        settingsRepo.setIntroDbIntegrationEnabled(val);
+                        ref.invalidate(settingsRepositoryProvider);
+                      },
+                    ),
+                    onTap: () {
+                      final current = settingsRepo.isIntroDbIntegrationEnabled();
+                      settingsRepo.setIntroDbIntegrationEnabled(!current);
+                      ref.invalidate(settingsRepositoryProvider);
                     },
                   ),
                 ],

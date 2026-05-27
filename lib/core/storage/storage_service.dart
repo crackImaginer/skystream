@@ -266,6 +266,27 @@ class StorageService {
         false;
   }
 
+  // --- Integrations ---
+  Future<void> setIntroDbIntegrationEnabled(bool enabled) async {
+    await _settingsBox.put('introdb_integration_enabled', enabled);
+  }
+
+  bool isIntroDbIntegrationEnabled() {
+    return (_settingsBox.get('introdb_integration_enabled', defaultValue: false)
+            as bool?) ??
+        false;
+  }
+
+  Future<void> setAnimeSkipIntegrationEnabled(bool enabled) async {
+    await _settingsBox.put('animeskip_integration_enabled', enabled);
+  }
+
+  bool isAnimeSkipIntegrationEnabled() {
+    return (_settingsBox.get('animeskip_integration_enabled', defaultValue: false)
+            as bool?) ??
+        false;
+  }
+
   // --- Player Settings ---
   Future<void> setPlayerSetting(String key, dynamic value) async {
     await _settingsBox.put(key, value);
