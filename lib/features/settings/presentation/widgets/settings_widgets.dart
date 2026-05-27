@@ -48,6 +48,7 @@ class SettingsTile extends StatefulWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final bool isLast;
+  final bool isBeta;
 
   const SettingsTile({
     super.key,
@@ -57,6 +58,7 @@ class SettingsTile extends StatefulWidget {
     this.trailing,
     this.onTap,
     this.isLast = false,
+    this.isBeta = false,
   });
 
   @override
@@ -121,9 +123,39 @@ class _SettingsTileState extends State<SettingsTile> {
                   ),
                   child: Icon(widget.icon, color: primary, size: 20),
                 ),
-                title: Text(
-                  widget.title,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.title,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    if (widget.isBeta) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(
+                            alpha: 0.2,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          "BETA",
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 subtitle: widget.subtitle != null
                     ? Text(

@@ -413,7 +413,8 @@ class AccountSettingsScreen extends ConsumerWidget {
                 children: [
                   SettingsTile(
                     icon: Icons.fast_forward_rounded,
-                    title: 'AnimeSkip (Beta)',
+                    title: 'AnimeSkip',
+                    isBeta: true,
                     subtitle: 'Automatically fetch skip segments for Anime',
                     trailing: Switch(
                       value: settingsRepo.isAnimeSkipIntegrationEnabled(),
@@ -431,7 +432,8 @@ class AccountSettingsScreen extends ConsumerWidget {
                   ),
                   SettingsTile(
                     icon: Icons.fast_forward_rounded,
-                    title: 'IntroDB (Beta)',
+                    title: 'IntroDB',
+                    isBeta: true,
                     subtitle: 'Automatically fetch skip segments for TV Shows',
                     isLast: true,
                     trailing: Switch(
