@@ -1,4 +1,5 @@
 import 'package:html_unescape/html_unescape.dart';
+import 'package:collection/collection.dart';
 
 import '../../config/tmdb_config.dart';
 
@@ -418,14 +419,20 @@ class MultimediaItem {
           url == other.url &&
           title == other.title &&
           posterUrl == other.posterUrl &&
-          provider == other.provider;
+          provider == other.provider &&
+          tmdbId == other.tmdbId &&
+          imdbId == other.imdbId &&
+          const MapEquality().equals(syncData, other.syncData);
 
   @override
   int get hashCode =>
       url.hashCode ^
       title.hashCode ^
       posterUrl.hashCode ^
-      (provider?.hashCode ?? 0);
+      (provider?.hashCode ?? 0) ^
+      (tmdbId?.hashCode ?? 0) ^
+      (imdbId?.hashCode ?? 0) ^
+      const MapEquality().hash(syncData);
 }
 
 class Episode {

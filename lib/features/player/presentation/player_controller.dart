@@ -478,6 +478,7 @@ class PlayerController extends Notifier<PlayerState> {
       });
     }
   }
+
   int? _pendingResumeSeekPosition;
   double? _pendingResumeSeekPercentage;
   bool _isApplyingPendingResumeSeek = false;
@@ -485,7 +486,7 @@ class PlayerController extends Notifier<PlayerState> {
   final List<SubtitleFile> _userAddedExternalSubtitles = [];
   bool _hasConfirmedPlaybackFrame = false;
   bool _suppressNextEpisodeDetection = false;
-  bool _nextEpisodeOverlayDismissedForCurrentEnding = false;
+  bool _isNextEpisodeOverlayForced = false;
   bool _manualSelectionPending = false;
   // Audio tracks that have already failed with decode errors for the current
   // stream. When one track fails, we try the next one before source-switching.
@@ -712,7 +713,9 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   bool get isSeries =>
-      _isInitialized && _item.contentType == MultimediaContentType.series;
+      _isInitialized &&
+      (_item.contentType == MultimediaContentType.series ||
+          _item.contentType == MultimediaContentType.anime);
   MultimediaItem? get multimediaItem => _isInitialized ? _item : null;
   String? get currentEpisodeUrl => _episode?.url ?? _videoUrl;
 
@@ -724,6 +727,7 @@ class PlayerController extends Notifier<PlayerState> {
     VideoController? videoViewController,
   }) async {
     state = const PlayerState(); // Resets all fields including errorMessage
+    _isDisposed = false; // Reset disposal flag on re-initialization
     unawaited(_logSub?.cancel());
     _logSub = null;
     _hasConfirmedPlaybackFrame = false;
@@ -827,19 +831,25 @@ class PlayerController extends Notifier<PlayerState> {
     if (_episode == null) return;
     if (state.isLive || _item.contentType == MultimediaContentType.livestream) {
       if (kDebugMode) {
-        debugPrint('Skip Segments: Bypassed lookup (livestreams are not supported)');
+        debugPrint(
+          'Skip Segments: Bypassed lookup (livestreams are not supported)',
+        );
       }
       return;
     }
 
-    final hasNoIds = state.tmdbId == null &&
+    final hasNoIds =
+        state.tmdbId == null &&
         state.imdbId == null &&
+        _item.syncData?['anilist'] == null &&
         _item.syncData?['anilistId'] == null &&
         _item.syncData?['anilist_id'] == null;
 
     if (hasNoIds) {
       if (kDebugMode) {
-        debugPrint('Skip Segments: Bypassed lookup (no TMDB/IMDB/AniList IDs available)');
+        debugPrint(
+          'Skip Segments: Bypassed lookup (no TMDB/IMDB/AniList IDs available)',
+        );
       }
       return;
     }
@@ -850,6 +860,8 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final List<SkipSegment> allSegments = [];
+    int season = _episode!.season > 0 ? _episode!.season : 1;
+    int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
     // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
     try {
@@ -857,8 +869,8 @@ class PlayerController extends Notifier<PlayerState> {
       final segments = await introDb.getSkipSegments(
         tmdbId: state.tmdbId,
         imdbId: state.imdbId,
-        season: _episode!.season,
-        episode: _episode!.episode,
+        season: season,
+        episode: episodeNum,
       );
       if (_isDisposed) return;
       if (segments.isNotEmpty) {
@@ -869,6 +881,8 @@ class PlayerController extends Notifier<PlayerState> {
             debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
           }
         }
+      } else {
+        if (kDebugMode) debugPrint('IntroDB returned 0 segments');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('IntroDB error: $e');
@@ -877,27 +891,23 @@ class PlayerController extends Notifier<PlayerState> {
     if (_isDisposed) return;
 
     // 2. Check if the media is anime or animated to run AnimeSkip logic
-    final isAnime = _item.contentType == MultimediaContentType.anime ||
-        (_item.provider != null && _item.provider!.toLowerCase().contains('anime')) ||
-        _item.url.contains('animepahe') ||
+    final isAnime =
+        _item.contentType == MultimediaContentType.anime ||
+        _item.syncData?['anilist'] != null ||
         _item.syncData?['anilistId'] != null ||
         _item.syncData?['anilist_id'] != null ||
-        (_item.tags != null && _item.tags!.any((t) => t.toLowerCase() == 'anime' || t.toLowerCase() == 'animation'));
+        (_item.tags != null &&
+            _item.tags!.any(
+              (t) =>
+                  t.toLowerCase() == 'anime' || t.toLowerCase() == 'animation',
+            ));
 
     if (isAnime) {
       try {
         var anilistId =
-            _item.syncData?['anilistId'] ?? _item.syncData?['anilist_id'];
-
-        if (anilistId == null) {
-          final simkl = ref.read(simklServiceProvider);
-          final resolved = await simkl.syncIds(_item);
-          if (_isDisposed) return;
-          if (kDebugMode) {
-            debugPrint('AnimeSkip: Resolved IDs from Simkl: $resolved');
-          }
-          anilistId = resolved['anilist'];
-        }
+            _item.syncData?['anilist'] ??
+            _item.syncData?['anilistId'] ??
+            _item.syncData?['anilist_id'];
 
         if (_isDisposed) return;
 
@@ -905,18 +915,24 @@ class PlayerController extends Notifier<PlayerState> {
           final animeSkip = ref.read(animeSkipServiceProvider);
           final segments = await animeSkip.getSkipSegments(
             anilistId: int.tryParse(anilistId.toString()),
-            season: _episode!.season,
-            episode: _episode!.episode,
+            season: season,
+            episode: episodeNum,
           );
           if (_isDisposed) return;
           if (segments.isNotEmpty) {
+            // AnimeSkip data is richer and more accurate for anime. Disregard IntroDB.
+            allSegments.clear();
             allSegments.addAll(segments);
             if (kDebugMode) {
               debugPrint('AnimeSkip returned ${segments.length} segments:');
               for (final s in segments) {
-                debugPrint('  - ${s.type.name}: ${s.startTime} -> ${s.endTime}');
+                debugPrint(
+                  '  - ${s.type.name}: ${s.startTime} -> ${s.endTime}',
+                );
               }
             }
+          } else {
+            if (kDebugMode) debugPrint('AnimeSkip returned 0 segments');
           }
         }
       } catch (e) {
@@ -924,7 +940,9 @@ class PlayerController extends Notifier<PlayerState> {
       }
     } else {
       if (kDebugMode) {
-        debugPrint('AnimeSkip: Bypassed lookup (media type is not anime/animated)');
+        debugPrint(
+          'AnimeSkip: Bypassed lookup (media type is not anime/animated)',
+        );
       }
     }
     if (kDebugMode) debugPrint('=============================================');
@@ -932,7 +950,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (allSegments.isNotEmpty && !_isDisposed) {
       // Sort segments by start time
       allSegments.sort((a, b) => a.startTime.compareTo(b.startTime));
-      
+
       // Merge overlapping segments if needed, or simply assign them.
       // Usually, IntroDB is highly accurate but AnimeSkip provides more detailed segments.
       // For now, we'll store all of them, but UI might prioritize or filter duplicates.
@@ -1088,10 +1106,7 @@ class PlayerController extends Notifier<PlayerState> {
               detail: "Reconnecting to live stream...",
             );
             _beginStallRecovery(
-              perform: changeStream(
-                state.currentStream!,
-                resetPosition: true,
-              ),
+              perform: changeStream(state.currentStream!, resetPosition: true),
             );
             return;
           }
@@ -1165,40 +1180,64 @@ class PlayerController extends Notifier<PlayerState> {
       }
 
       if (!_suppressNextEpisodeDetection &&
-          _item.contentType == MultimediaContentType.series) {
+          (_item.contentType == MultimediaContentType.series ||
+              _item.contentType == MultimediaContentType.anime)) {
         final remainingSecs = (durationMs - posMs) / 1000;
-        if (remainingSecs > 15) {
-          _nextEpisodeOverlayDismissedForCurrentEnding = false;
-          if (state.showNextEpisodeOverlay) {
-            state = state.copyWith(showNextEpisodeOverlay: false);
-          }
-        } else if (!_nextEpisodeOverlayDismissedForCurrentEnding &&
-            remainingSecs <= 15 &&
-            remainingSecs > 0 &&
-            !state.showNextEpisodeOverlay) {
+
+        // Show next episode overlay if within last 15 seconds or video ended.
+        // It persists until the user dismisses it or loads a new episode.
+        if (remainingSecs <= 15.0) {
           int? currentIndex;
           if (_episode != null) {
-            currentIndex = _item.episodes?.indexWhere(
-              (e) => e.url == _episode!.url,
-            );
+            currentIndex = _item.episodes?.indexWhere((e) => e.url == _episode!.url);
           } else {
-            currentIndex = _item.episodes?.indexWhere(
-              (e) => e.url == _videoUrl,
-            );
+            currentIndex = _item.episodes?.indexWhere((e) => e.url == _videoUrl);
           }
-
-          if (currentIndex != null &&
-              currentIndex != -1 &&
-              currentIndex < _item.episodes!.length - 1) {
+          if (currentIndex != null && currentIndex != -1 && currentIndex < _item.episodes!.length - 1) {
             final next = _item.episodes![currentIndex + 1];
-            state = state.copyWith(
-              showNextEpisodeOverlay: true,
-              nextEpisodeTitle: next.name,
-            );
+            if (!state.showNextEpisodeOverlay) {
+              state = state.copyWith(
+                showNextEpisodeOverlay: true,
+                nextEpisodeTitle: next.name,
+              );
+            }
+            // Ensure it persists if video completes and resets position
+            _isNextEpisodeOverlayForced = true;
+          }
+          return;
+        }
+
+        if (remainingSecs > 15.0) {
+          if (state.showNextEpisodeOverlay && !_isNextEpisodeOverlayForced) {
+            state = state.copyWith(showNextEpisodeOverlay: false);
           }
         }
       }
     });
+  }
+
+  void forceNextEpisodeOverlay() {
+    if (_item.contentType != MultimediaContentType.series &&
+        _item.contentType != MultimediaContentType.anime)
+      return;
+
+    int? currentIndex;
+    if (_episode != null) {
+      currentIndex = _item.episodes?.indexWhere((e) => e.url == _episode!.url);
+    } else {
+      currentIndex = _item.episodes?.indexWhere((e) => e.url == _videoUrl);
+    }
+
+    if (currentIndex != null &&
+        currentIndex != -1 &&
+        currentIndex < _item.episodes!.length - 1) {
+      final next = _item.episodes![currentIndex + 1];
+      _isNextEpisodeOverlayForced = true;
+      state = state.copyWith(
+        showNextEpisodeOverlay: true,
+        nextEpisodeTitle: next.name,
+      );
+    }
   }
 
   void _setupRateListener() {
@@ -1456,10 +1495,7 @@ class PlayerController extends Notifier<PlayerState> {
             detail: "Reconnecting to live stream...",
           );
           _beginStallRecovery(
-            perform: changeStream(
-              state.currentStream!,
-              resetPosition: true,
-            ),
+            perform: changeStream(state.currentStream!, resetPosition: true),
           );
           return;
         }
@@ -1592,18 +1628,15 @@ class PlayerController extends Notifier<PlayerState> {
 
       // Next Episode Detection (Series only, trigger 15s before end)
       if (!_suppressNextEpisodeDetection &&
-          _item.contentType == MultimediaContentType.series) {
-        final remaining = duration - pos;
-        if (remaining.inSeconds > 15) {
-          _nextEpisodeOverlayDismissedForCurrentEnding = false;
-          if (state.showNextEpisodeOverlay) {
-            state = state.copyWith(showNextEpisodeOverlay: false);
-          }
-        } else if (!_nextEpisodeOverlayDismissedForCurrentEnding &&
-            remaining.inSeconds <= 15 &&
-            remaining.inSeconds > 0 &&
-            !state.showNextEpisodeOverlay) {
-          // Use _episode if available, otherwise fallback to URL matching
+          (_item.contentType == MultimediaContentType.series ||
+              _item.contentType == MultimediaContentType.anime)) {
+        final durationMs = duration.inMilliseconds;
+        final posMs = pos.inMilliseconds;
+        final remainingSecs = (durationMs - posMs) / 1000;
+
+        // Show next episode overlay if within last 15 seconds or video ended.
+        // It persists until the user dismisses it or loads a new episode.
+        if (remainingSecs <= 15.0) {
           int? currentIndex;
           if (_episode != null) {
             currentIndex = _item.episodes?.indexWhere(
@@ -1614,15 +1647,25 @@ class PlayerController extends Notifier<PlayerState> {
               (e) => e.url == _videoUrl,
             );
           }
-
           if (currentIndex != null &&
               currentIndex != -1 &&
               currentIndex < _item.episodes!.length - 1) {
             final next = _item.episodes![currentIndex + 1];
-            state = state.copyWith(
-              showNextEpisodeOverlay: true,
-              nextEpisodeTitle: next.name,
-            );
+            if (!state.showNextEpisodeOverlay) {
+              state = state.copyWith(
+                showNextEpisodeOverlay: true,
+                nextEpisodeTitle: next.name,
+              );
+            }
+            // Ensure it persists if video completes and resets position
+            _isNextEpisodeOverlayForced = true;
+          }
+          return;
+        }
+
+        if (remainingSecs > 15.0) {
+          if (state.showNextEpisodeOverlay && !_isNextEpisodeOverlayForced) {
+            state = state.copyWith(showNextEpisodeOverlay: false);
           }
         }
       }
@@ -1642,7 +1685,7 @@ class PlayerController extends Notifier<PlayerState> {
     // playback naturally completes (H-PLAYER-7). The position listener
     // self-heals once `remainingSecs > 15`, but inside the narrow
     // last-15s window during a retry it would otherwise stay stuck.
-    _nextEpisodeOverlayDismissedForCurrentEnding = false;
+
 
     final sourceSessionId = forceNewSourceSession
         ? _beginSourceSession(resetAttempts: true)
@@ -1834,7 +1877,9 @@ class PlayerController extends Notifier<PlayerState> {
   int _findSavedStreamIndex(List<StreamResult> streams) {
     try {
       final historyRepo = ref.read(historyRepositoryProvider);
-      final isSeries = _item.contentType == MultimediaContentType.series;
+      final isSeries =
+          (_item.contentType == MultimediaContentType.series ||
+          _item.contentType == MultimediaContentType.anime);
 
       String? lastUrl;
       if (isSeries) {
@@ -2095,6 +2140,8 @@ class PlayerController extends Notifier<PlayerState> {
 
   Future<void> seekTo(Duration position, {bool fast = false}) async {
     if (!state.canSeek) return;
+
+    _isNextEpisodeOverlayForced = false;
 
     final clamped = position < Duration.zero ? Duration.zero : position;
 
@@ -2522,7 +2569,9 @@ class PlayerController extends Notifier<PlayerState> {
       );
 
       final historyRepo = ref.read(historyRepositoryProvider);
-      final isSeries = _item.contentType == MultimediaContentType.series;
+      final isSeries =
+          (_item.contentType == MultimediaContentType.series ||
+          _item.contentType == MultimediaContentType.anime);
 
       int savedPos = 0;
       if (isSeries) {
@@ -3013,7 +3062,7 @@ class PlayerController extends Notifier<PlayerState> {
 
       // NOW switch context to the next episode.
       _suppressNextEpisodeDetection = true;
-      _nextEpisodeOverlayDismissedForCurrentEnding = false;
+
       _hasConfirmedPlaybackFrame = false;
       _videoUrl = finalUrl;
       _episode = nextEpisode;
@@ -3032,7 +3081,6 @@ class PlayerController extends Notifier<PlayerState> {
   }
 
   void dismissNextEpisodeOverlay() {
-    _nextEpisodeOverlayDismissedForCurrentEnding = true;
     state = state.copyWith(showNextEpisodeOverlay: false);
   }
 
@@ -3066,9 +3114,11 @@ class PlayerController extends Notifier<PlayerState> {
     _videoUrl = finalUrl;
     _hasConfirmedPlaybackFrame = false;
     _suppressNextEpisodeDetection = true;
-    _nextEpisodeOverlayDismissedForCurrentEnding = false;
+
     _userAddedExternalSubtitles.clear();
     _resetPerEpisodeState();
+    
+    unawaited(_fetchAndLogSkipSegments());
 
     state = state.copyWith(
       playerTitle: "${_item.title} - ${episode.name}",
@@ -3118,7 +3168,9 @@ class PlayerController extends Notifier<PlayerState> {
 
       final double progressPercent = (pos / dur) * 100;
       final double progressDecimal = pos / dur;
-      final bool isSeries = _item.contentType == MultimediaContentType.series;
+      final bool isSeries =
+          (_item.contentType == MultimediaContentType.series ||
+          _item.contentType == MultimediaContentType.anime);
       final currentEpisode = _resolveCurrentEpisode();
       final syncManager = ref.read(syncManagerProvider);
 
@@ -3322,9 +3374,7 @@ class PlayerController extends Notifier<PlayerState> {
           ref
               .read(syncManagerProvider)
               .scrobbleStop(_item, _resolveCurrentEpisode(), progressDecimal)
-              .catchError(
-                (Object e) => talker.error('scrobbleStop failed', e),
-              ),
+              .catchError((Object e) => talker.error('scrobbleStop failed', e)),
         );
       }
     } catch (_) {}

@@ -66,6 +66,9 @@ class SkipSegment {
       }
       // Drop zero/negative-length after clamps.
       if (end - start < 1.0) continue;
+      // Filter out unknown segments to avoid random "Skip" buttons
+      if (seg.type == SkipType.unknown) continue;
+      
       cleaned.add(
         SkipSegment(startTime: start, endTime: end, type: seg.type),
       );

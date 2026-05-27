@@ -119,6 +119,11 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
     ref
         .read(playerControllerProvider.notifier)
         .seekTo(Duration(milliseconds: (segment.endTime * 1000).toInt()));
+        
+    if (segment.type == SkipType.outro) {
+      ref.read(playerControllerProvider.notifier).forceNextEpisodeOverlay();
+    }
+    
     setState(() => _isSkipping = true);
     _skipDebounceTimer?.cancel();
     _skipDebounceTimer = Timer(const Duration(seconds: 2), () {

@@ -26,7 +26,7 @@ class NextEpisodeOverlay extends StatelessWidget {
         subtitle: nextEpisodeTitle,
         duration: const Duration(seconds: 15),
         onPressed: onPlayNext,
-        onTimeout: onDismiss,
+        onTimeout: () {},
         isTv: isTv,
       ),
     );
