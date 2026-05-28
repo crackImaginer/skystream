@@ -203,17 +203,15 @@ class _CustomTextFieldState extends State<CustomTextField> {
 
         final key = event.logicalKey;
 
-        // Use directional traversal anchored to our own node so D-pad Up/Down
-        // lands on the spatial neighbour. The previous unfocus/disable/
-        // re-enable dance relied on a 100ms timer that could race on slow
-        // devices and re-focus the field instead of moving on.
+        // Use sequential focus traversal for D-pad Up/Down instead of spatial.
+        // Spatial traversal (focusInDirection) is erratic in complex dialogs.
         if (key == LogicalKeyboardKey.arrowUp) {
-          _focusNode.focusInDirection(TraversalDirection.up);
+          _focusNode.previousFocus();
           return KeyEventResult.handled;
         }
 
         if (key == LogicalKeyboardKey.arrowDown) {
-          _focusNode.focusInDirection(TraversalDirection.down);
+          _focusNode.nextFocus();
           return KeyEventResult.handled;
         }
 
@@ -270,7 +268,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
         // dialog, so bail out if we got unmounted before moving focus.
         widget.onSubmitted?.call(value);
         if (mounted) {
-          _focusNode.focusInDirection(TraversalDirection.down);
+          _focusNode.nextFocus();
         }
       },
     );

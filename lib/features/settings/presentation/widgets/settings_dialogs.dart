@@ -1083,173 +1083,179 @@ void showOpenSubtitlesAuthDialog(
       var isObscure = true;
 
       return StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          surfaceTintColor: Colors.transparent,
-          title: Row(
-            children: [
-              const Icon(Icons.subtitles_rounded, color: Colors.blue),
-              const SizedBox(width: 12),
-              Text(l10n.openSubtitles),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setState) => FocusTraversalGroup(
+          policy: WidgetOrderTraversalPolicy(),
+          child: AlertDialog(
+            surfaceTintColor: Colors.transparent,
+            title: Row(
               children: [
-                Text(
-                  l10n.openSubtitlesAuthSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: userController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: l10n.username,
-                    prefixIcon: const Icon(Icons.person_outline, size: 20),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                CustomTextField(
-                  controller: passController,
-                  obscureText: isObscure,
-                  decoration: InputDecoration(
-                    labelText: l10n.password,
-                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                    suffixIcon: ExcludeFocus(
-                      child: IconButton(
-                        icon: Icon(
-                          isObscure ? Icons.visibility_off : Icons.visibility,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => isObscure = !isObscure),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://www.opensubtitles.com/en/users/sign_up'),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                  label: Text(l10n.noAccountRegister),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                if (verifyResult != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        verifyResult!
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.error_outline_rounded,
-                        color: verifyResult! ? Colors.green : Colors.red,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        verifyResult!
-                            ? l10n.connectedSuccessfully
-                            : l10n.connectionFailed,
-                        style: TextStyle(
-                          color: verifyResult! ? Colors.green : Colors.red,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: isVerifying
-                        ? null
-                        : () async {
-                            setState(() {
-                              isVerifying = true;
-                              verifyResult = null;
-                            });
-                            final ok = await ref
-                                .read(playerSettingsProvider.notifier)
-                                .verifyOpenSubtitles(
-                                  userController.text.trim(),
-                                  passController.text.trim(),
-                                );
-                            if (ctx.mounted) {
-                              setState(() {
-                                isVerifying = false;
-                                verifyResult = ok;
-                              });
-                            }
-                          },
-                    icon: isVerifying
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 18,
-                          ),
-                    label: Text(l10n.testConnection),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
+                const Icon(Icons.subtitles_rounded, color: Colors.blue),
+                const SizedBox(width: 12),
+                Text(l10n.openSubtitles),
               ],
             ),
-          ),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: isVerifying
-                      ? null
-                      : () => Navigator.pop<void>(ctx),
-                  child: Text(
-                    l10n.cancel,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.openSubtitlesAuthSubtitle,
                     style: TextStyle(
+                      fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CustomButton(
-                  isPrimary: true,
-                  onPressed: isVerifying
-                      ? null
-                      : () {
-                          ref
-                              .read(playerSettingsProvider.notifier)
-                              .setOpenSubtitlesCredentials(
-                                userController.text.trim(),
-                                passController.text.trim(),
-                              );
-                          Navigator.pop<void>(ctx);
-                        },
-                  child: Text(l10n.save),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: userController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: l10n.username,
+                      prefixIcon: const Icon(Icons.person_outline, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  CustomTextField(
+                    controller: passController,
+                    obscureText: isObscure,
+                    decoration: InputDecoration(
+                      labelText: l10n.password,
+                      prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                      suffixIcon: ExcludeFocus(
+                        child: IconButton(
+                          icon: Icon(
+                            isObscure ? Icons.visibility_off : Icons.visibility,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              setState(() => isObscure = !isObscure),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse(
+                        'https://www.opensubtitles.com/en/users/sign_up',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: Text(l10n.noAccountRegister),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  if (verifyResult != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          verifyResult!
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.error_outline_rounded,
+                          color: verifyResult! ? Colors.green : Colors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          verifyResult!
+                              ? l10n.connectedSuccessfully
+                              : l10n.connectionFailed,
+                          style: TextStyle(
+                            color: verifyResult! ? Colors.green : Colors.red,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: isVerifying
+                          ? null
+                          : () async {
+                              setState(() {
+                                isVerifying = true;
+                                verifyResult = null;
+                              });
+                              final ok = await ref
+                                  .read(playerSettingsProvider.notifier)
+                                  .verifyOpenSubtitles(
+                                    userController.text.trim(),
+                                    passController.text.trim(),
+                                  );
+                              if (ctx.mounted) {
+                                setState(() {
+                                  isVerifying = false;
+                                  verifyResult = ok;
+                                });
+                              }
+                            },
+                      icon: isVerifying
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 18,
+                            ),
+                      label: Text(l10n.testConnection),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: isVerifying
+                        ? null
+                        : () => Navigator.pop<void>(ctx),
+                    child: Text(
+                      l10n.cancel,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CustomButton(
+                    isPrimary: true,
+                    onPressed: isVerifying
+                        ? null
+                        : () {
+                            ref
+                                .read(playerSettingsProvider.notifier)
+                                .setOpenSubtitlesCredentials(
+                                  userController.text.trim(),
+                                  passController.text.trim(),
+                                );
+                            Navigator.pop<void>(ctx);
+                          },
+                    child: Text(l10n.save),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     },
@@ -1278,260 +1284,265 @@ void showSubDlAuthDialog(
       bool? verifyKeyResult;
 
       return StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          surfaceTintColor: Colors.transparent,
-          title: const Row(
-            children: [
-              Icon(Icons.vpn_key_rounded, color: Colors.orange),
-              SizedBox(width: 12),
-              Text('SubDL API Key'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setState) => FocusTraversalGroup(
+          policy: WidgetOrderTraversalPolicy(),
+          child: AlertDialog(
+            surfaceTintColor: Colors.transparent,
+            title: const Row(
               children: [
-                Text(
-                  l10n.subDlAuthSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: apiKeyController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: l10n.apiKey,
-                    prefixIcon: const Icon(Icons.key_rounded, size: 20),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'OR FETCH VIA ACCOUNT',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: emailController,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: l10n.email,
-                    prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                CustomTextField(
-                  controller: passController,
-                  obscureText: isObscure,
-                  decoration: InputDecoration(
-                    labelText: l10n.password,
-                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                    suffixIcon: ExcludeFocus(
-                      child: IconButton(
-                        icon: Icon(
-                          isObscure ? Icons.visibility_off : Icons.visibility,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => isObscure = !isObscure),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: (isFetching || isVerifyingKey)
-                        ? null
-                        : () async {
-                            setState(() {
-                              isFetching = true;
-                              fetchError = null;
-                              verifyKeyResult = null;
-                            });
-                            final result = await ref
-                                .read(playerSettingsProvider.notifier)
-                                .verifySubDl(
-                                  emailController.text.trim(),
-                                  passController.text.trim(),
-                                );
-                            if (ctx.mounted) {
-                              setState(() {
-                                isFetching = false;
-                                if (result.key != null) {
-                                  apiKeyController.text = result.key!;
-                                } else {
-                                  fetchError = result.error;
-                                }
-                              });
-                            }
-                          },
-                    icon: isFetching
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.download_rounded, size: 18),
-                    label: Text(l10n.fetchMyApiKey),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: theme.colorScheme.primary.withValues(
-                        alpha: 0.8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://subdl.com/panel/api'),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                  label: Text(l10n.noAccountRegister),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                if (fetchError != null || verifyKeyResult != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        fetchError != null || verifyKeyResult == false
-                            ? Icons.error_outline_rounded
-                            : Icons.check_circle_outline_rounded,
-                        color: fetchError != null || verifyKeyResult == false
-                            ? Colors.red
-                            : Colors.green,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          fetchError ??
-                              (verifyKeyResult!
-                                  ? l10n.keyVerified
-                                  : l10n.invalidApiKey),
-                          style: TextStyle(
-                            color:
-                                fetchError != null || verifyKeyResult == false
-                                ? Colors.red
-                                : Colors.green,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: (isFetching || isVerifyingKey)
-                        ? null
-                        : () async {
-                            setState(() {
-                              isVerifyingKey = true;
-                              verifyKeyResult = null;
-                              fetchError = null;
-                            });
-                            final ok = await ref
-                                .read(playerSettingsProvider.notifier)
-                                .verifySubDlKey(apiKeyController.text.trim());
-                            if (ctx.mounted) {
-                              setState(() {
-                                isVerifyingKey = false;
-                                verifyKeyResult = ok;
-                              });
-                            }
-                          },
-                    icon: isVerifyingKey
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 18,
-                          ),
-                    label: Text(l10n.testConnection),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
+                Icon(Icons.vpn_key_rounded, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('SubDL API Key'),
               ],
             ),
-          ),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: (isFetching || isVerifyingKey)
-                      ? null
-                      : () => Navigator.pop<void>(ctx),
-                  child: Text(
-                    l10n.cancel,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.subDlAuthSubtitle,
                     style: TextStyle(
+                      fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CustomButton(
-                  isPrimary: true,
-                  onPressed: (isFetching || isVerifyingKey)
-                      ? null
-                      : () {
-                          ref
-                              .read(playerSettingsProvider.notifier)
-                              .setSubDlAuth(
-                                apiKey: apiKeyController.text.trim(),
-                                email: emailController.text.trim(),
-                                pass: passController.text.trim(),
-                              );
-                          Navigator.pop<void>(ctx);
-                        },
-                  child: Text(l10n.save),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: apiKeyController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: l10n.apiKey,
+                      prefixIcon: const Icon(Icons.key_rounded, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR FETCH VIA ACCOUNT',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: emailController,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: l10n.email,
+                      prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  CustomTextField(
+                    controller: passController,
+                    obscureText: isObscure,
+                    decoration: InputDecoration(
+                      labelText: l10n.password,
+                      prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                      suffixIcon: ExcludeFocus(
+                        child: IconButton(
+                          icon: Icon(
+                            isObscure ? Icons.visibility_off : Icons.visibility,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              setState(() => isObscure = !isObscure),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: (isFetching || isVerifyingKey)
+                          ? null
+                          : () async {
+                              setState(() {
+                                isFetching = true;
+                                fetchError = null;
+                                verifyKeyResult = null;
+                              });
+                              final result = await ref
+                                  .read(playerSettingsProvider.notifier)
+                                  .verifySubDl(
+                                    emailController.text.trim(),
+                                    passController.text.trim(),
+                                  );
+                              if (ctx.mounted) {
+                                setState(() {
+                                  isFetching = false;
+                                  if (result.key != null) {
+                                    apiKeyController.text = result.key!;
+                                  } else {
+                                    fetchError = result.error;
+                                  }
+                                });
+                              }
+                            },
+                      icon: isFetching
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded, size: 18),
+                      label: Text(l10n.fetchMyApiKey),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        backgroundColor: theme.colorScheme.primary.withValues(
+                          alpha: 0.8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://subdl.com/panel/api'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: Text(l10n.noAccountRegister),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  if (fetchError != null || verifyKeyResult != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          fetchError != null || verifyKeyResult == false
+                              ? Icons.error_outline_rounded
+                              : Icons.check_circle_outline_rounded,
+                          color: fetchError != null || verifyKeyResult == false
+                              ? Colors.red
+                              : Colors.green,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            fetchError ??
+                                (verifyKeyResult!
+                                    ? l10n.keyVerified
+                                    : l10n.invalidApiKey),
+                            style: TextStyle(
+                              color:
+                                  fetchError != null || verifyKeyResult == false
+                                  ? Colors.red
+                                  : Colors.green,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: (isFetching || isVerifyingKey)
+                          ? null
+                          : () async {
+                              setState(() {
+                                isVerifyingKey = true;
+                                verifyKeyResult = null;
+                                fetchError = null;
+                              });
+                              final ok = await ref
+                                  .read(playerSettingsProvider.notifier)
+                                  .verifySubDlKey(apiKeyController.text.trim());
+                              if (ctx.mounted) {
+                                setState(() {
+                                  isVerifyingKey = false;
+                                  verifyKeyResult = ok;
+                                });
+                              }
+                            },
+                      icon: isVerifyingKey
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 18,
+                            ),
+                      label: Text(l10n.testConnection),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: (isFetching || isVerifyingKey)
+                        ? null
+                        : () => Navigator.pop<void>(ctx),
+                    child: Text(
+                      l10n.cancel,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CustomButton(
+                    isPrimary: true,
+                    onPressed: (isFetching || isVerifyingKey)
+                        ? null
+                        : () {
+                            ref
+                                .read(playerSettingsProvider.notifier)
+                                .setSubDlAuth(
+                                  apiKey: apiKeyController.text.trim(),
+                                  email: emailController.text.trim(),
+                                  pass: passController.text.trim(),
+                                );
+                            Navigator.pop<void>(ctx);
+                          },
+                    child: Text(l10n.save),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     },
@@ -1554,147 +1565,150 @@ void showSubSourceAuthDialog(
       bool? verifyResult;
 
       return StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          surfaceTintColor: Colors.transparent,
-          title: const Row(
-            children: [
-              Icon(Icons.vpn_key_rounded, color: Colors.blue),
-              SizedBox(width: 12),
-              Text('SubSource API Key'),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setState) => FocusTraversalGroup(
+          policy: WidgetOrderTraversalPolicy(),
+          child: AlertDialog(
+            surfaceTintColor: Colors.transparent,
+            title: const Row(
               children: [
-                Text(
-                  l10n.subSourceAuthSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  controller: keyController,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: l10n.apiKeyOptionalOverride,
-                    prefixIcon: const Icon(Icons.key_rounded, size: 20),
-                    hintText: l10n.enterKeyToOverrideDefault,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://subsource.net/dashboard/profile'),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                  label: Text(l10n.getApiKeyFromProfile),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                if (verifyResult != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        verifyResult!
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.error_outline_rounded,
-                        color: verifyResult! ? Colors.green : Colors.red,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        verifyResult! ? l10n.keyVerified : l10n.invalidApiKey,
-                        style: TextStyle(
-                          color: verifyResult! ? Colors.green : Colors.red,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: isVerifying
-                        ? null
-                        : () async {
-                            setState(() {
-                              isVerifying = true;
-                              verifyResult = null;
-                            });
-                            final ok = await ref
-                                .read(playerSettingsProvider.notifier)
-                                .verifySubSource(keyController.text.trim());
-                            if (ctx.mounted) {
-                              setState(() {
-                                isVerifying = false;
-                                verifyResult = ok;
-                              });
-                            }
-                          },
-                    icon: isVerifying
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 18,
-                          ),
-                    label: Text(l10n.testConnection),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
+                Icon(Icons.vpn_key_rounded, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('SubSource API Key'),
               ],
             ),
-          ),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: isVerifying
-                      ? null
-                      : () => Navigator.pop<void>(ctx),
-                  child: Text(
-                    l10n.cancel,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.subSourceAuthSubtitle,
                     style: TextStyle(
+                      fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CustomButton(
-                  isPrimary: true,
-                  onPressed: isVerifying
-                      ? null
-                      : () {
-                          ref
-                              .read(playerSettingsProvider.notifier)
-                              .setSubSourceApiKey(keyController.text.trim());
-                          Navigator.pop<void>(ctx);
-                        },
-                  child: Text(l10n.save),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  CustomTextField(
+                    controller: keyController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: l10n.apiKeyOptionalOverride,
+                      prefixIcon: const Icon(Icons.key_rounded, size: 20),
+                      hintText: l10n.enterKeyToOverrideDefault,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://subsource.net/dashboard/profile'),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                    label: Text(l10n.getApiKeyFromProfile),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  if (verifyResult != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          verifyResult!
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.error_outline_rounded,
+                          color: verifyResult! ? Colors.green : Colors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          verifyResult! ? l10n.keyVerified : l10n.invalidApiKey,
+                          style: TextStyle(
+                            color: verifyResult! ? Colors.green : Colors.red,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: isVerifying
+                          ? null
+                          : () async {
+                              setState(() {
+                                isVerifying = true;
+                                verifyResult = null;
+                              });
+                              final ok = await ref
+                                  .read(playerSettingsProvider.notifier)
+                                  .verifySubSource(keyController.text.trim());
+                              if (ctx.mounted) {
+                                setState(() {
+                                  isVerifying = false;
+                                  verifyResult = ok;
+                                });
+                              }
+                            },
+                      icon: isVerifying
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 18,
+                            ),
+                      label: Text(l10n.testConnection),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: isVerifying
+                        ? null
+                        : () => Navigator.pop<void>(ctx),
+                    child: Text(
+                      l10n.cancel,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CustomButton(
+                    isPrimary: true,
+                    onPressed: isVerifying
+                        ? null
+                        : () {
+                            ref
+                                .read(playerSettingsProvider.notifier)
+                                .setSubSourceApiKey(keyController.text.trim());
+                            Navigator.pop<void>(ctx);
+                          },
+                    child: Text(l10n.save),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     },

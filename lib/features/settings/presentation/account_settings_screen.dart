@@ -442,7 +442,7 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
                     icon: Icons.fast_forward_rounded,
                     title: 'AnimeSkip',
                     isBeta: true,
-                    subtitle: 'Automatically fetch skip segments for Anime',
+                    subtitle: 'Automatically fetch skip segments for Anime (requires AniList authentication)',
                     trailing: Switch(
                       value: settingsRepo.isAnimeSkipIntegrationEnabled(),
                       onChanged: (val) {
