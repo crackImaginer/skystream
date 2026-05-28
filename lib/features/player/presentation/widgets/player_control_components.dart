@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
 import 'player_stream_widgets.dart';
 
-/// Top bar with back button and title for the player.
-/// Extracted from SkyStreamPlayerControls to reduce widget size.
+/// Top zone: back button + title/subtitle. Paints its own top scrim so the
+/// chrome no longer needs a separate fixed-height Positioned gradient.
 class PlayerTopBar extends StatelessWidget {
   final String title;
   final String? subtitle;
   final VoidCallback? onBack;
   final bool isTv;
   final FocusNode? backFocusNode;
-  final List<Widget> trailingActions;
 
   const PlayerTopBar({
     super.key,
@@ -24,70 +22,58 @@ class PlayerTopBar extends StatelessWidget {
     this.onBack,
     this.isTv = false,
     this.backFocusNode,
-    this.trailingActions = const [],
   });
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: GestureDetector(
-        onTap: () {},
-        onDoubleTap: () {},
-        onHorizontalDragStart: (_) {},
-        onVerticalDragStart: (_) {},
-        child: Container(
-          padding: EdgeInsets.only(
-            top: MediaQuery.viewPaddingOf(context).top + 16,
-            left: 20,
-            right: 20,
-            bottom: 8,
-          ),
+    final edge = isTv
+        ? HotstarPlayerStyle.tvEdgeInset
+        : HotstarPlayerStyle.edgeInset;
+    return DecoratedBox(
+      decoration: const BoxDecoration(gradient: HotstarPlayerStyle.topGradient),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(edge, 14, edge, 24),
           child: Row(
             children: [
-              CustomButton(
-                showFocusHighlight: isTv,
+              PlayerIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: onBack,
+                isTv: isTv,
                 focusNode: backFocusNode,
-                onPressed: onBack ?? () => context.pop(),
-                child: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 34,
-                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (subtitle != null)
+                    if (subtitle != null && subtitle!.isNotEmpty)
                       Text(
                         subtitle!,
                         style: const TextStyle(
                           color: HotstarPlayerStyle.secondaryText,
                           fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    const SizedBox(height: 4),
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HotstarPlayerStyle.primaryText,
-                        fontSize: 18,
+                        fontSize: isTv ? 22 : 18,
                         fontWeight: FontWeight.w700,
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.left,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              ...trailingActions,
             ],
           ),
         ),
@@ -96,13 +82,74 @@ class PlayerTopBar extends StatelessWidget {
   }
 }
 
-/// Center playback controls (seek back, play/pause, seek forward).
-/// Uses StreamBuilder-based PlayerPlayPauseButton for efficient updates.
+/// Bottom zone shell: scrubber row on top, then a single controls row laid out
+/// as [leading] (playback buttons) · scrollable [actions] · [trailing]
+/// (utilities). Paints its own bottom scrim. Pure layout — the orchestrator
+/// supplies the content so this widget never needs a long callback list.
+class PlayerBottomBar extends StatelessWidget {
+  final Widget progressBar;
+  final List<Widget> leading;
+  final List<Widget> actions;
+  final List<Widget> trailing;
+  final bool isTv;
+
+  const PlayerBottomBar({
+    super.key,
+    required this.progressBar,
+    this.leading = const [],
+    this.actions = const [],
+    this.trailing = const [],
+    this.isTv = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final edge = isTv
+        ? HotstarPlayerStyle.tvEdgeInset
+        : HotstarPlayerStyle.edgeInset;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: HotstarPlayerStyle.bottomGradient,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(edge, 8, edge, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              progressBar,
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  ...leading,
+                  if (leading.isNotEmpty) const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(children: actions),
+                    ),
+                  ),
+                  if (trailing.isNotEmpty) const SizedBox(width: 8),
+                  ...trailing,
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Center playback cluster (rewind / play-pause / forward) used on touch
+/// devices where the thumb-reach center tap target is expected.
 class PlayerCenterControls extends StatelessWidget {
   final Player player;
   final vv.VideoController? videoViewController;
   final bool isLoading;
   final bool isTv;
+  final bool canSeek;
   final FocusNode? playFocusNode;
   final VoidCallback onSeekBackward;
   final VoidCallback onSeekForward;
@@ -117,63 +164,59 @@ class PlayerCenterControls extends StatelessWidget {
     this.videoViewController,
     this.isLoading = false,
     this.isTv = false,
+    this.canSeek = true,
     this.playFocusNode,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: FocusTraversalGroup(
-        policy: OrderedTraversalPolicy(),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(0),
-              child: _RoundedPlaybackButton(
-                icon: Icons.keyboard_double_arrow_left_rounded,
-                size: 46,
-                isTv: isTv,
-                onPressed: onSeekBackward,
-              ),
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canSeek) ...[
+            PlayerSeekButton(
+              icon: Icons.replay_10_rounded,
+              size: 44,
+              isTv: isTv,
+              onPressed: onSeekBackward,
             ),
-            const SizedBox(width: 64),
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(1),
-              child: PlayerPlayPauseButton(
-                player: player,
-                videoViewController: videoViewController,
-                isLoading: isLoading,
-                isTv: isTv,
-                focusNode: playFocusNode,
-                onPressed: onPlayPause,
-              ),
-            ),
-            const SizedBox(width: 64),
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(2),
-              child: _RoundedPlaybackButton(
-                icon: Icons.keyboard_double_arrow_right_rounded,
-                size: 46,
-                isTv: isTv,
-                onPressed: onSeekForward,
-              ),
+            const SizedBox(width: 56),
+          ],
+          PlayerPlayPauseButton(
+            player: player,
+            videoViewController: videoViewController,
+            isLoading: isLoading,
+            isTv: isTv,
+            size: 82,
+            focusNode: playFocusNode,
+            onPressed: onPlayPause,
+          ),
+          if (canSeek) ...[
+            const SizedBox(width: 56),
+            PlayerSeekButton(
+              icon: Icons.forward_10_rounded,
+              size: 44,
+              isTv: isTv,
+              onPressed: onSeekForward,
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _RoundedPlaybackButton extends StatelessWidget {
+/// A circular rewind/forward button. Used at large size in the touch center
+/// cluster and at compact size inline in the TV/desktop control row.
+class PlayerSeekButton extends StatelessWidget {
   final IconData icon;
   final double size;
   final bool isTv;
   final VoidCallback onPressed;
 
-  const _RoundedPlaybackButton({
+  const PlayerSeekButton({
+    super.key,
     required this.icon,
     required this.size,
     required this.isTv,
@@ -196,18 +239,62 @@ class _RoundedPlaybackButton extends StatelessWidget {
   }
 }
 
-/// A reusable action button for the player controls bottom bar.
+/// Compact icon-only button for utilities (resize, PiP, fullscreen) and the
+/// top-bar back button. Tooltip doubles as the semantics label.
+class PlayerIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool isTv;
+  final bool highlight;
+  final FocusNode? focusNode;
+
+  const PlayerIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.isTv = false,
+    this.highlight = false,
+    this.focusNode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final double box = isTv ? 48 : 44;
+    return Tooltip(
+      message: tooltip,
+      child: CustomButton(
+        onPressed: onPressed,
+        showFocusHighlight: isTv,
+        focusNode: focusNode,
+        shape: const CircleBorder(),
+        child: SizedBox(
+          width: box,
+          height: box,
+          child: Icon(
+            icon,
+            color: highlight
+                ? Theme.of(context).colorScheme.primary
+                : Colors.white,
+            size: isTv ? 28 : 26,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Labelled icon button for the controls row (Sources, Subtitles, Speed, …).
+/// Activates on tap and on D-pad/keyboard select/enter/space when focused;
+/// directional navigation between buttons is handled natively by the
+/// enclosing traversal group — this widget never moves focus itself.
 class PlayerActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool rotate;
   final bool highlight;
   final bool isTv;
-  final int focusOrder;
-  /// Optional external focus node. Pass one when the caller needs to
-  /// `.requestFocus()` from elsewhere (e.g. the vertical-traversal jump
-  /// from the center play button down into the actions row).
   final FocusNode? focusNode;
 
   const PlayerActionButton({
@@ -215,10 +302,8 @@ class PlayerActionButton extends StatefulWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.rotate = false,
     this.highlight = false,
     this.isTv = false,
-    this.focusOrder = 0,
     this.focusNode,
   });
 
@@ -239,18 +324,13 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
   @override
   Widget build(BuildContext context) {
     final isActive = widget.highlight || _hovered || _focused || _pressed;
-    // Use the theme primary so the focus ring / glow / active tint match
-    // the play-pause + seek buttons (which go through CustomButton and use
-    // colorScheme.primary). Previously this used the fixed Hotstar accent
-    // blue, making bottom-row buttons look different from the center ones.
     final primaryColor = Theme.of(context).colorScheme.primary;
-    // On TV, focused state needs a high-contrast indicator (border + glow +
-    // slight scale) — the tint alone is invisible at 3-4 m viewing distance.
-    // Mouse hover still uses the lighter tint.
     final showTvFocusRing = widget.isTv && _focused;
 
-    return FocusTraversalOrder(
-      order: NumericFocusOrder(widget.focusOrder.toDouble()),
+    return Semantics(
+      button: true,
+      selected: widget.highlight,
+      label: widget.label,
       child: Focus(
         focusNode: widget.focusNode,
         onFocusChange: (value) => setState(() => _focused = value),
@@ -273,31 +353,28 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
             _pressed = false;
           }),
           child: AnimatedScale(
-            // Match CustomButton's TV-focus scale so play/pause + seek +
-            // top-utility + bottom-action buttons all "lift" by the same
-            // amount on focus (Bug 1 — visual consistency).
-            scale: showTvFocusRing ? 1.04 : 1.0,
+            scale: showTvFocusRing ? HotstarPlayerStyle.focusScale : 1.0,
             duration: HotstarPlayerStyle.fastMotionDuration,
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 onTap: widget.onTap,
                 onHighlightChanged: _setPressed,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 hoverColor: Colors.transparent,
                 focusColor: Colors.transparent,
                 splashColor: Colors.transparent,
                 highlightColor: Colors.transparent,
                 child: AnimatedContainer(
                   duration: HotstarPlayerStyle.fastMotionDuration,
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  constraints: const BoxConstraints(minHeight: 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: isActive
                         ? primaryColor.withValues(alpha: 0.16)
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                     border: showTvFocusRing
                         ? Border.all(color: primaryColor, width: 2)
                         : null,
@@ -311,41 +388,32 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                           ]
                         : null,
                   ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: widget.rotate ? 0.5 : 0.0),
-                      duration: const Duration(milliseconds: 180),
-                      builder: (context, value, child) {
-                        return Transform.rotate(
-                          angle: value * 3.14159,
-                          child: Icon(
-                            widget.icon,
-                            color: isActive ? primaryColor : Colors.white,
-                            size: 20,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.label,
-                      style: TextStyle(
-                        color: isActive
-                            ? primaryColor
-                            : HotstarPlayerStyle.primaryText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.icon,
+                        color: isActive ? primaryColor : Colors.white,
+                        size: 20,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: isActive
+                              ? primaryColor
+                              : HotstarPlayerStyle.primaryText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           ),
         ),
       ),

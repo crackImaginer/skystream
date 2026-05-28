@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
@@ -16,12 +17,18 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
   final VoidCallback? onSeekStart;
   final VoidCallback? onSeekEnd;
 
+  /// On TV the scrubber becomes a focusable element: D-pad Left/Right seek by
+  /// the configured step and the thumb enlarges while focused. Off TV the
+  /// slider stays pointer-only (it is reached by touch/mouse, not focus).
+  final bool isTv;
+
   const PlayerProgressBar({
     super.key,
     required this.player,
     this.videoViewController,
     this.onSeekStart,
     this.onSeekEnd,
+    this.isTv = false,
   });
 
   @override
@@ -30,6 +37,8 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
 
 class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
   double? _dragValue;
+  bool _scrubFocused = false;
+  final FocusNode _scrubFocusNode = FocusNode(debugLabel: 'scrubber');
   static const double _sliderTrackInset = 24;
 
   // ValueNotifiers so position/duration updates don't setState the whole widget.
@@ -96,7 +105,32 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     widget.videoViewController?.mediaInfo.removeListener(_onVvMediaInfo);
     _vvPositionNotifier.dispose();
     _vvDurationNotifier.dispose();
+    _scrubFocusNode.dispose();
     super.dispose();
+  }
+
+  /// D-pad Left/Right seek while the scrubber holds focus on TV. Uses the
+  /// user's configured seek step, matching the center seek buttons.
+  KeyEventResult _handleScrubKey(KeyEvent event, bool canSeek) {
+    if (!canSeek) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final step =
+        ref.read(playerSettingsProvider).asData?.value.seekDuration ?? 10;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      ref
+          .read(playerControllerProvider.notifier)
+          .seekRelative(Duration(seconds: -step));
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      ref
+          .read(playerControllerProvider.notifier)
+          .seekRelative(Duration(seconds: step));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   String _formatDuration(Duration duration) {
@@ -357,151 +391,166 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
               duration: duration,
               displayDuration: displayDuration,
             ),
-            SizedBox(
-              height: 34,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const tooltipWidth = 76.0;
-                  final scrubPercent = durationMs > 0
-                      ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
-                      : 0.0;
-                  final maxTooltipLeft = constraints.maxWidth > tooltipWidth
-                      ? constraints.maxWidth - tooltipWidth
-                      : 0.0;
-                  final tooltipLeft =
-                      (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
-                          .clamp(0.0, maxTooltipLeft)
-                          .toDouble();
+            Focus(
+              focusNode: _scrubFocusNode,
+              canRequestFocus: widget.isTv && canSeek,
+              skipTraversal: !(widget.isTv && canSeek),
+              onFocusChange: (f) {
+                if (mounted) setState(() => _scrubFocused = f);
+              },
+              onKeyEvent: (node, event) => _handleScrubKey(event, canSeek),
+              child: SizedBox(
+                height: 34,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const tooltipWidth = 76.0;
+                    final scrubPercent = durationMs > 0
+                        ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
+                        : 0.0;
+                    final maxTooltipLeft = constraints.maxWidth > tooltipWidth
+                        ? constraints.maxWidth - tooltipWidth
+                        : 0.0;
+                    final tooltipLeft =
+                        (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
+                            .clamp(0.0, maxTooltipLeft)
+                            .toDouble();
 
-                  return Stack(
-                    alignment: Alignment.center,
-                    clipBehavior: Clip.none,
-                    children: [
-                      ?bufferWidget,
-                      if (durationMs > 0 && skipSegments.isNotEmpty)
-                        ...skipSegments.map((seg) {
-                          final leftPercent =
-                              (seg.startTime * 1000 / durationMs).clamp(
-                                0.0,
-                                1.0,
-                              );
-                          final rightPercent = (seg.endTime * 1000 / durationMs)
-                              .clamp(0.0, 1.0);
-                          if (leftPercent >= rightPercent) {
-                            return const SizedBox.shrink();
-                          }
+                    return Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        ?bufferWidget,
+                        if (durationMs > 0 && skipSegments.isNotEmpty)
+                          ...skipSegments.map((seg) {
+                            final leftPercent =
+                                (seg.startTime * 1000 / durationMs).clamp(
+                                  0.0,
+                                  1.0,
+                                );
+                            final rightPercent =
+                                (seg.endTime * 1000 / durationMs).clamp(
+                                  0.0,
+                                  1.0,
+                                );
+                            if (leftPercent >= rightPercent) {
+                              return const SizedBox.shrink();
+                            }
 
-                          return Positioned(
-                            left: constraints.maxWidth * leftPercent,
-                            width:
-                                constraints.maxWidth *
-                                (rightPercent - leftPercent),
-                            height: 2.5,
-                            child: ColoredBox(
-                              color: HotstarPlayerStyle.accent.withValues(
-                                alpha: 0.8,
-                              ),
-                            ),
-                          );
-                        }),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 2.5,
-                          thumbShape: RoundSliderThumbShape(
-                            enabledThumbRadius: canSeek
-                                ? (isDragging ? 8 : 6)
-                                // Hide the thumb entirely when the stream
-                                // isn't seekable (live) — a visible thumb
-                                // that doesn't respond to drag is the worst
-                                // UX, users tap it and assume the player is
-                                // broken.
-                                : 0,
-                          ),
-                          overlayShape: RoundSliderOverlayShape(
-                            overlayRadius: canSeek
-                                ? (isDragging ? 16 : 10)
-                                : 0,
-                          ),
-                          activeTrackColor: canSeek
-                              ? HotstarPlayerStyle.accent
-                              : HotstarPlayerStyle.accent.withValues(
-                                  alpha: 0.5,
+                            return Positioned(
+                              left: constraints.maxWidth * leftPercent,
+                              width:
+                                  constraints.maxWidth *
+                                  (rightPercent - leftPercent),
+                              height: 2.5,
+                              child: ColoredBox(
+                                color: HotstarPlayerStyle.accent.withValues(
+                                  alpha: 0.8,
                                 ),
-                          inactiveTrackColor: HotstarPlayerStyle.trackInactive,
-                          disabledActiveTrackColor: HotstarPlayerStyle.accent
-                              .withValues(alpha: 0.5),
-                          disabledInactiveTrackColor:
-                              HotstarPlayerStyle.trackInactive,
-                          disabledThumbColor: Colors.transparent,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                          thumbColor: Colors.white,
-                          overlayColor: HotstarPlayerStyle.accent.withValues(
-                            alpha: 0.18,
+                              ),
+                            );
+                          }),
+                        SliderTheme(
+                          data: SliderThemeData(
+                            trackHeight: _scrubFocused ? 4 : 2.5,
+                            thumbShape: RoundSliderThumbShape(
+                              enabledThumbRadius: canSeek
+                                  ? (isDragging ? 8 : (_scrubFocused ? 9 : 6))
+                                  // Hide the thumb entirely when the stream
+                                  // isn't seekable (live) — a visible thumb
+                                  // that doesn't respond to drag is the worst
+                                  // UX, users tap it and assume the player is
+                                  // broken.
+                                  : 0,
+                            ),
+                            overlayShape: RoundSliderOverlayShape(
+                              overlayRadius: canSeek
+                                  ? (isDragging || _scrubFocused ? 16 : 10)
+                                  : 0,
+                            ),
+                            activeTrackColor: canSeek
+                                ? HotstarPlayerStyle.accent
+                                : HotstarPlayerStyle.accent.withValues(
+                                    alpha: 0.5,
+                                  ),
+                            inactiveTrackColor:
+                                HotstarPlayerStyle.trackInactive,
+                            disabledActiveTrackColor: HotstarPlayerStyle.accent
+                                .withValues(alpha: 0.5),
+                            disabledInactiveTrackColor:
+                                HotstarPlayerStyle.trackInactive,
+                            disabledThumbColor: Colors.transparent,
+                            trackShape: const RoundedRectSliderTrackShape(),
+                            thumbColor: Colors.white,
+                            overlayColor: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.18,
+                            ),
+                          ),
+                          child: CustomSlider(
+                            value: displayValue.clamp(
+                              0,
+                              durationMs > 0 ? durationMs : 1.0,
+                            ),
+                            min: 0.0,
+                            max: durationMs > 0 ? durationMs : 1.0,
+                            step: 5000,
+                            onChanged: canSeek
+                                ? (val) => setState(() => _dragValue = val)
+                                : null,
+                            onChangeStart: canSeek
+                                ? (val) {
+                                    widget.onSeekStart?.call();
+                                    setState(() => _dragValue = val);
+                                  }
+                                : null,
+                            onChangeEnd: canSeek
+                                ? (val) {
+                                    onSeekEnd(val);
+                                    widget.onSeekEnd?.call();
+                                    setState(() => _dragValue = null);
+                                  }
+                                : null,
                           ),
                         ),
-                        child: CustomSlider(
-                          value: displayValue.clamp(
-                            0,
-                            durationMs > 0 ? durationMs : 1.0,
-                          ),
-                          min: 0.0,
-                          max: durationMs > 0 ? durationMs : 1.0,
-                          step: 5000,
-                          onChanged: canSeek
-                              ? (val) => setState(() => _dragValue = val)
-                              : null,
-                          onChangeStart: canSeek
-                              ? (val) {
-                                  widget.onSeekStart?.call();
-                                  setState(() => _dragValue = val);
-                                }
-                              : null,
-                          onChangeEnd: canSeek
-                              ? (val) {
-                                  onSeekEnd(val);
-                                  widget.onSeekEnd?.call();
-                                  setState(() => _dragValue = null);
-                                }
-                              : null,
-                        ),
-                      ),
-                      if (isDragging)
-                        Positioned(
-                          left: tooltipLeft,
-                          bottom: 34,
-                          child: IgnorePointer(
-                            child: SizedBox(
-                              width: tooltipWidth,
-                              child: Center(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.82),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    _formatDuration(displayDuration),
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      fontFeatures: [
-                                        FontFeature.tabularFigures(),
-                                      ],
+                        if (isDragging)
+                          Positioned(
+                            left: tooltipLeft,
+                            bottom: 34,
+                            child: IgnorePointer(
+                              child: SizedBox(
+                                width: tooltipWidth,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.82,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _formatDuration(displayDuration),
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        fontFeatures: [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -516,6 +565,7 @@ class PlayerPlayPauseButton extends StatelessWidget {
   final vv.VideoController? videoViewController;
   final bool isLoading;
   final bool isTv;
+  final double size;
   final FocusNode? focusNode;
   final VoidCallback? onPressed;
 
@@ -525,6 +575,7 @@ class PlayerPlayPauseButton extends StatelessWidget {
     this.videoViewController,
     this.isLoading = false,
     this.isTv = false,
+    this.size = 82,
     this.focusNode,
     this.onPressed,
   });
@@ -580,14 +631,14 @@ class PlayerPlayPauseButton extends StatelessWidget {
       onPressed: onPressed ?? () => player.playOrPause(),
       shape: const CircleBorder(),
       child: Container(
-        width: 82,
-        height: 82,
+        width: size,
+        height: size,
         alignment: Alignment.center,
         child: isSpinning
-            ? const SizedBox(
-                width: 64,
-                height: 64,
-                child: Padding(
+            ? SizedBox(
+                width: size * 0.78,
+                height: size * 0.78,
+                child: const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: CircularProgressIndicator(
                     color: Colors.white,
@@ -598,7 +649,7 @@ class PlayerPlayPauseButton extends StatelessWidget {
             : Icon(
                 isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 color: Colors.white,
-                size: 72,
+                size: size * 0.88,
               ),
       ),
     );

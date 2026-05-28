@@ -87,7 +87,6 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
   late final AnimationController _controller;
   Timer? _timer;
   bool _completed = false;
-  final FocusNode _focusNode = FocusNode(debugLabel: 'countdown_fill_button');
 
   @override
   void initState() {
@@ -95,23 +94,12 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
     _controller = AnimationController(vsync: this, duration: widget.duration)
       ..forward();
     _timer = Timer(widget.duration, _handleTimeout);
-    // On TV, grab focus on appear so D-pad Select/Enter activates the
-    // primary action immediately. Without this, the 8-second resume
-    // countdown can elapse before the user even reaches the button.
-    if (widget.isTv) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _focusNode.canRequestFocus) {
-          _focusNode.requestFocus();
-        }
-      });
-    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -145,164 +133,172 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
         : (isCompact ? 58.0 : 64.0);
     final borderRadius = BorderRadius.circular(isCompact ? 8 : 10);
 
-    return Focus(
-      focusNode: _focusNode,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        final key = event.logicalKey;
-        if (key == LogicalKeyboardKey.select ||
-            key == LogicalKeyboardKey.enter ||
-            key == LogicalKeyboardKey.space) {
-          _handlePressed();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.escape ||
-            key == LogicalKeyboardKey.goBack) {
-          if (widget.onDismiss != null) {
-            _handleDismiss();
-          } else {
-            // No explicit dismiss — fire the timeout path early so the
-            // overlay tears itself down instead of trapping focus.
-            _handleTimeout();
+    return FocusTraversalGroup(
+      child: Focus(
+        autofocus: widget.isTv,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.space) {
+            _handlePressed();
+            return KeyEventResult.handled;
           }
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Builder(
-        builder: (context) {
-          final isFocused = Focus.of(context).hasFocus;
-          return AnimatedScale(
-            scale: isFocused && widget.isTv ? 1.04 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            child: SizedBox(
-              width: buttonWidth,
-              height: buttonHeight,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.52),
-                        borderRadius: borderRadius,
-                        boxShadow: isFocused && widget.isTv
-                            ? [
-                                BoxShadow(
-                                  color: HotstarPlayerStyle.accent.withValues(
-                                    alpha: 0.55,
-                                  ),
-                                  blurRadius: 16,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
-                        border: Border.all(
-                          color: isFocused && widget.isTv
-                              ? HotstarPlayerStyle.accent
-                              : Colors.white.withValues(alpha: 0.22),
-                          width: isFocused && widget.isTv ? 2 : 1,
-                        ),
-                      ),
-                    ),
-                  ),
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: borderRadius,
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  return Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: _controller.value,
-                      heightFactor: 1,
-                      child: child,
-                    ),
-                  );
-                },
-                child: ColoredBox(
-                  color: HotstarPlayerStyle.accent.withValues(alpha: 0.92),
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: borderRadius,
-                onTap: _handlePressed,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 12 : 16,
-                    vertical: isCompact ? 7 : 8,
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      SizedBox(width: isCompact ? 6 : 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isCompact ? 13 : 15,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            if (widget.subtitle != null) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                widget.subtitle!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.78),
-                                  fontSize: isCompact ? 10 : 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (widget.showDismiss && widget.onDismiss != null)
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          onPressed: _handleDismiss,
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-              ),
-            ),
-          );
+          if (key == LogicalKeyboardKey.escape ||
+              key == LogicalKeyboardKey.goBack) {
+            if (widget.onDismiss != null) {
+              _handleDismiss();
+            } else {
+              // No explicit dismiss — fire the timeout path early so the
+              // overlay tears itself down instead of trapping focus.
+              _handleTimeout();
+            }
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
         },
+        child: Builder(
+          builder: (context) {
+            final isFocused = Focus.of(context).hasFocus;
+            return AnimatedScale(
+              scale: isFocused && widget.isTv ? 1.04 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: SizedBox(
+                width: buttonWidth,
+                height: buttonHeight,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.52),
+                          borderRadius: borderRadius,
+                          boxShadow: isFocused && widget.isTv
+                              ? [
+                                  BoxShadow(
+                                    color: HotstarPlayerStyle.accent.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                    blurRadius: 16,
+                                    spreadRadius: 1,
+                                  ),
+                                ]
+                              : null,
+                          border: Border.all(
+                            color: isFocused && widget.isTv
+                                ? HotstarPlayerStyle.accent
+                                : Colors.white.withValues(alpha: 0.22),
+                            width: isFocused && widget.isTv ? 2 : 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: borderRadius,
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, child) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: _controller.value,
+                                heightFactor: 1,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: ColoredBox(
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.92,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: borderRadius,
+                          onTap: _handlePressed,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 12 : 16,
+                              vertical: isCompact ? 7 : 8,
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                                SizedBox(width: isCompact ? 6 : 8),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: isCompact ? 13 : 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      if (widget.subtitle != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          widget.subtitle!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
+                                            fontSize: isCompact ? 10 : 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                if (widget.showDismiss &&
+                                    widget.onDismiss != null)
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                    onPressed: _handleDismiss,
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

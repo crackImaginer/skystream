@@ -111,7 +111,6 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
       setState(() {
         _activeSegment = newSegment;
       });
-      _maybeRequestTvFocus(newSegment);
     }
   }
 
@@ -119,27 +118,16 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
     ref
         .read(playerControllerProvider.notifier)
         .seekTo(Duration(milliseconds: (segment.endTime * 1000).toInt()));
-        
+
     if (segment.type == SkipType.outro) {
       ref.read(playerControllerProvider.notifier).forceNextEpisodeOverlay();
     }
-    
+
     setState(() => _isSkipping = true);
     _skipDebounceTimer?.cancel();
     _skipDebounceTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _isSkipping = false);
     });
-  }
-
-  /// Request focus on TV when a segment becomes active.
-  void _maybeRequestTvFocus(SkipSegment? newSegment) {
-    if (widget.isTv && newSegment != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _focusNode.canRequestFocus) {
-          _focusNode.requestFocus();
-        }
-      });
-    }
   }
 
   String _labelForType(SkipType type, AppLocalizations l10n) {
@@ -218,95 +206,98 @@ class _SkipPill extends StatelessWidget {
     final borderRadius = BorderRadius.circular(isCompact ? 8 : 10);
     final buttonHeight = isCompact ? 46.0 : 52.0;
 
-    return Focus(
-      focusNode: focusNode,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (event.logicalKey == LogicalKeyboardKey.select ||
-            event.logicalKey == LogicalKeyboardKey.enter ||
-            event.logicalKey == LogicalKeyboardKey.space) {
-          onPressed();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Builder(
-        builder: (context) {
-          final isFocused = Focus.of(context).hasFocus;
-          return AnimatedScale(
-            scale: isFocused ? 1.04 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            child: AnimatedContainer(
+    return FocusTraversalGroup(
+      child: Focus(
+        focusNode: focusNode,
+        autofocus: isTv,
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space) {
+            onPressed();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Builder(
+          builder: (context) {
+            final isFocused = Focus.of(context).hasFocus;
+            return AnimatedScale(
+              scale: isFocused ? 1.04 : 1.0,
               duration: const Duration(milliseconds: 150),
-              decoration: BoxDecoration(
-                borderRadius: borderRadius,
-                boxShadow: isFocused
-                    ? [
-                        BoxShadow(
-                          color: HotstarPlayerStyle.accent.withValues(
-                            alpha: 0.55,
+              curve: Curves.easeOut,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  borderRadius: borderRadius,
+                  boxShadow: isFocused
+                      ? [
+                          BoxShadow(
+                            color: HotstarPlayerStyle.accent.withValues(
+                              alpha: 0.55,
+                            ),
+                            blurRadius: 16,
+                            spreadRadius: 1,
                           ),
-                          blurRadius: 16,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.52),
-                    borderRadius: borderRadius,
-                    border: Border.all(
-                      color: isFocused
-                          ? HotstarPlayerStyle.accent
-                          : Colors.white.withValues(alpha: 0.22),
-                      width: isFocused ? 2 : 1,
+                        ]
+                      : null,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.52),
+                      borderRadius: borderRadius,
+                      border: Border.all(
+                        color: isFocused
+                            ? HotstarPlayerStyle.accent
+                            : Colors.white.withValues(alpha: 0.22),
+                        width: isFocused ? 2 : 1,
+                      ),
                     ),
-                  ),
-                  child: InkWell(
-                    borderRadius: borderRadius,
-                    onTap: onPressed,
-                    focusColor: HotstarPlayerStyle.accent.withValues(
-                      alpha: 0.24,
-                    ),
-                    child: SizedBox(
-                      height: buttonHeight,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isCompact ? 14 : 18,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.skip_next_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            SizedBox(width: isCompact ? 6 : 8),
-                            Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                    child: InkWell(
+                      borderRadius: borderRadius,
+                      onTap: onPressed,
+                      focusColor: HotstarPlayerStyle.accent.withValues(
+                        alpha: 0.24,
+                      ),
+                      child: SizedBox(
+                        height: buttonHeight,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 14 : 18,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.skip_next_rounded,
                                 color: Colors.white,
-                                fontSize: isCompact ? 13 : 15,
-                                fontWeight: FontWeight.w800,
+                                size: 20,
                               ),
-                            ),
-                          ],
+                              SizedBox(width: isCompact ? 6 : 8),
+                              Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: isCompact ? 13 : 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

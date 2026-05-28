@@ -27,7 +27,6 @@ class PlayerEpisodeOverlay extends ConsumerStatefulWidget {
 
 class _PlayerEpisodeOverlayState extends ConsumerState<PlayerEpisodeOverlay> {
   final ScrollController _scrollController = ScrollController();
-  final FocusScopeNode _focusScopeNode = FocusScopeNode();
   int? _selectedSeason;
   List<int> _seasons = [];
 
@@ -102,7 +101,6 @@ class _PlayerEpisodeOverlayState extends ConsumerState<PlayerEpisodeOverlay> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _focusScopeNode.dispose();
     super.dispose();
   }
 
@@ -326,6 +324,9 @@ class _EpisodeItemState extends State<_EpisodeItem> {
   @override
   Widget build(BuildContext context) {
     return FocusableActionDetector(
+      // On TV, seed focus on the currently-playing episode so the panel opens
+      // with a live D-pad anchor.
+      autofocus: widget.isTv && widget.isPlaying,
       onShowHoverHighlight: (v) => setState(() => _isHovered = v),
       child: InkWell(
         onTap: widget.onTap,

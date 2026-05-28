@@ -18,7 +18,6 @@ import '../components/torrent_info_widget.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
-import '../../../../shared/widgets/custom_widgets.dart';
 import 'player_stream_widgets.dart';
 import 'player_control_components.dart';
 import 'next_episode_overlay.dart';
@@ -48,6 +47,12 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
   final void Function(BoxFit)? onResize;
   final void Function(bool)? onVisibilityChanged;
 
+  /// Called when the chrome hides so the parent can return focus to its
+  /// persistent root handler node (which lives outside the ExcludeFocus
+  /// subtree). This is the single mechanism that keeps D-pad alive after the
+  /// controls auto-hide — replacing the old `primaryFocus.unfocus()` dance.
+  final VoidCallback? onRequestRootFocus;
+
   const SkyStreamPlayerControls({
     super.key,
     required this.player,
@@ -63,6 +68,7 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
     this.onTorrentFileSelected,
     this.onResize,
     this.onVisibilityChanged,
+    this.onRequestRootFocus,
     this.isLoading = false,
   });
 
@@ -76,15 +82,10 @@ class SkyStreamPlayerControls extends ConsumerStatefulWidget {
 class SkyStreamPlayerControlsState
     extends ConsumerState<SkyStreamPlayerControls>
     with SingleTickerProviderStateMixin {
-  final FocusNode _backFocusNode = FocusNode();
   bool _isVisible = false;
   bool _isIpad = false;
   bool _isTv = false;
   bool _isInPip = false;
-
-  void focusBack() {
-    _backFocusNode.requestFocus();
-  }
 
   void togglePlayPause() => _togglePlay();
 
@@ -110,14 +111,10 @@ class SkyStreamPlayerControlsState
   Offset? _tapPosition;
   Duration _animDuration = HotstarPlayerStyle.controlFadeDuration;
   bool _isFullscreen = false;
+  // The single focus anchor: when the chrome (re)appears on TV we move focus
+  // here (the bottom-row play/pause). Directional traversal handles every
+  // other movement between controls — no other requestFocus calls exist.
   late final FocusNode _playFocusNode;
-  // Anchor for the first button in the bottom actions row. Used to bounce
-  // focus from the center play button (D-pad Down) into the actions row
-  // and to send focus back up (D-pad Up) — gives a real two-level
-  // vertical focus hierarchy on TV (H-DPAD-3).
-  final FocusNode _firstActionFocusNode = FocusNode(
-    debugLabel: 'first_action_button',
-  );
 
   @override
   void initState() {
@@ -336,8 +333,6 @@ class SkyStreamPlayerControlsState
     }
     FocusManager.instance.removeListener(_onFocusChange);
     _playFocusNode.dispose();
-    _backFocusNode.dispose();
-    _firstActionFocusNode.dispose();
     _hideTimer?.cancel();
     _seekAnimController.dispose();
     for (final s in _subscriptions) {
@@ -457,18 +452,14 @@ class SkyStreamPlayerControlsState
 
   // ... (keeping other methods same)
 
-  /// Drop focus from whatever control was focused when the overlay hides.
-  /// ExcludeFocus makes the descendants non-focusable, but the node that
-  /// already had focus stays "primary" until something else claims it —
-  /// which means a hidden button (e.g. the top-right aspect-ratio button)
-  /// could still swallow an OK/arrow press. Explicitly returning focus to
-  /// the enclosing scope (the PlayerScreen root Focus) guarantees the next
-  /// key press reaches the root handler, which re-shows the controls and
-  /// re-focuses the play button.
-  void _dropFocusToRoot() {
-    if (!_isTv) return;
-    final primary = FocusManager.instance.primaryFocus;
-    primary?.unfocus();
+  /// Hand focus back to the parent's persistent root handler node when the
+  /// chrome hides. The chrome subtree is `ExcludeFocus`'d while hidden, so the
+  /// previously-focused control can no longer receive keys; routing focus to
+  /// the always-present root node guarantees the next remote/keyboard press is
+  /// seen and re-shows the controls. Replaces the old `unfocus()` dance that
+  /// dropped focus into an ancestor scope outside the handler's dispatch path.
+  void _returnFocusToRoot() {
+    widget.onRequestRootFocus?.call();
   }
 
   void _toggleVisibility() {
@@ -481,7 +472,7 @@ class SkyStreamPlayerControlsState
       _startHideTimer();
       if (_isTv) _playFocusNode.requestFocus();
     } else {
-      _dropFocusToRoot();
+      _returnFocusToRoot();
     }
   }
 
@@ -490,7 +481,7 @@ class SkyStreamPlayerControlsState
       _hideTimer?.cancel();
       setState(() => _isVisible = false);
       widget.onVisibilityChanged?.call(false);
-      _dropFocusToRoot();
+      _returnFocusToRoot();
     }
   }
 
@@ -527,7 +518,7 @@ class SkyStreamPlayerControlsState
           _isVisible = false;
         });
         widget.onVisibilityChanged?.call(false);
-        _dropFocusToRoot();
+        _returnFocusToRoot();
       }
     });
   }
@@ -909,29 +900,17 @@ class SkyStreamPlayerControlsState
                 // Persistent buffering indicator
                 PlayerBufferingIndicator(isVisible: _isVisible),
 
-                // Seek animation — isolated via AnimatedBuilder
+                // Seek kick animation — a single Align (no nested Stack):
+                // ~8% in from the seeking edge, ~45% down from the top.
                 AnimatedBuilder(
                   animation: _seekAnimController,
                   builder: (context, _) {
                     if (!_seekAnimController.isAnimating) {
                       return const SizedBox.shrink();
                     }
-                    return Positioned.fill(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final width = constraints.maxWidth;
-                          return Stack(
-                            children: [
-                              Positioned(
-                                top: constraints.maxHeight * 0.45,
-                                left: _isSeekingLeft ? width * 0.08 : null,
-                                right: _isSeekingLeft ? null : width * 0.08,
-                                child: _buildKickAnimation(),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                    return Align(
+                      alignment: Alignment(_isSeekingLeft ? -0.84 : 0.84, -0.1),
+                      child: _buildKickAnimation(),
                     );
                   },
                 ),
@@ -941,6 +920,27 @@ class SkyStreamPlayerControlsState
                   getDuration: () => _duration,
                   formatDuration: _formatDuration,
                 ),
+
+                // Torrent stats card — top-right, toggled by the Stats action.
+                // Lives directly in the single overlay Stack (non-focusable).
+                if (torrentStatus != null && _showTorrentInfo)
+                  SafeArea(
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          top: 72,
+                          right: _isTv
+                              ? HotstarPlayerStyle.tvEdgeInset
+                              : HotstarPlayerStyle.edgeInset,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
+                          child: TorrentInfoWidget(status: torrentStatus),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Resume Prompt Button
                 if (resumePromptPosition != null ||
@@ -991,37 +991,33 @@ class SkyStreamPlayerControlsState
                 if (isSeries) ...[
                   // Edge Arrow Toggle (only when controls are visible, list is closed, and not locked)
                   if (_isVisible && !showEpisodeList && !_isLocked)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => ref
-                                .read(playerControllerProvider.notifier)
-                                .toggleEpisodeList(),
-                            borderRadius: const BorderRadius.horizontal(
-                              left: Radius.circular(30),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => ref
+                              .read(playerControllerProvider.notifier)
+                              .toggleEpisodeList(),
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(30),
+                          ),
+                          child: Container(
+                            height: 80,
+                            width: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              borderRadius: const BorderRadius.horizontal(
+                                left: Radius.circular(30),
+                              ),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.1),
+                              ),
                             ),
-                            child: Container(
-                              height: 80,
-                              width: 32,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.5),
-                                borderRadius: const BorderRadius.horizontal(
-                                  left: Radius.circular(30),
-                                ),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.1),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.chevron_left_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
+                            child: const Icon(
+                              Icons.chevron_left_rounded,
+                              color: Colors.white,
+                              size: 28,
                             ),
                           ),
                         ),
@@ -1055,7 +1051,6 @@ class SkyStreamPlayerControlsState
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    bool rotate = false,
     bool highlight = false,
     FocusNode? focusNode,
   }) {
@@ -1066,28 +1061,6 @@ class SkyStreamPlayerControlsState
       highlight: highlight,
       isTv: _isTv,
       focusNode: focusNode,
-    );
-  }
-
-  Widget _buildTopUtilityButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 10),
-      child: Tooltip(
-        message: tooltip,
-        child: CustomButton(
-          showFocusHighlight: _isTv,
-          onPressed: onTap,
-          child: SizedBox(
-            width: _isTv ? 52 : 44,
-            height: _isTv ? 52 : 44,
-            child: Icon(icon, color: Colors.white, size: _isTv ? 34 : 30),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1104,7 +1077,6 @@ class SkyStreamPlayerControlsState
               icon: Icons.lock,
               label: AppLocalizations.of(context)!.unlock,
               onTap: _toggleLock,
-              rotate: false,
               highlight: false,
             ),
           ),
@@ -1126,369 +1098,239 @@ class SkyStreamPlayerControlsState
     required double playbackSpeed,
     required double maxPlaybackSpeed,
   }) {
-    // ExcludeFocus when hidden: stale focus on (e.g.) the zoom button or
-    // a bottom-row action shouldn't intercept D-pad keys after the
-    // controls auto-hide. With this, all key events flow up to the
-    // PlayerScreen root handler instead, which then shows controls and
-    // refocuses the play button. Fixes Bugs 3 + 4.
-    return ExcludeFocus(
-      excluding: !_isVisible,
-      child: AnimatedOpacity(
-      opacity: _isVisible ? 1.0 : 0.0,
-      duration: _animDuration,
-      child: IgnorePointer(
-        ignoring: !_isVisible,
-        child: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 150 + MediaQuery.viewPaddingOf(context).top,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: HotstarPlayerStyle.topGradient,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: 210 + MediaQuery.viewPaddingOf(context).bottom,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: HotstarPlayerStyle.bottomGradient,
-                  ),
-                ),
-              ),
-            ),
-            PlayerTopBar(
-              title: title,
-              subtitle: subtitle,
-              onBack: widget.onBackPointer ?? () => context.pop(),
-              isTv: _isTv,
-              backFocusNode: _backFocusNode,
-              trailingActions: [
-                if (Platform.isAndroid && !_isTv)
-                  _buildTopUtilityButton(
-                    icon: Icons.picture_in_picture_alt,
-                    tooltip: AppLocalizations.of(context)!.pip,
-                    onTap: _enterPip,
-                  ),
-                _buildTopUtilityButton(
-                  icon: Icons.aspect_ratio,
-                  tooltip: AppLocalizations.of(context)!.resize,
-                  onTap: cycleResize,
-                ),
-                if (Platform.isMacOS || Platform.isWindows || Platform.isLinux)
-                  _buildTopUtilityButton(
-                    icon: _isFullscreen
-                        ? Icons.fullscreen_exit
-                        : Icons.fullscreen,
-                    tooltip: _isFullscreen
-                        ? AppLocalizations.of(context)!.windowed
-                        : AppLocalizations.of(context)!.fullscreen,
-                    onTap: toggleFullscreen,
-                  ),
-              ],
-            ),
+    final l10n = AppLocalizations.of(context)!;
+    final isTouch = !_isTv && (Platform.isAndroid || Platform.isIOS);
+    final isDesktop =
+        Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+    final canSeek = ref.watch(
+      playerControllerProvider.select((s) => s.canSeek),
+    );
+    final seekStep =
+        ref.watch(
+          playerSettingsProvider.select((s) => s.asData?.value.seekDuration),
+        ) ??
+        10;
 
-            // Torrent Info Overlay
-            if (torrentStatus != null && _showTorrentInfo)
-              Positioned(
-                top: 80,
-                right: 20,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 300),
-                  child: TorrentInfoWidget(status: torrentStatus),
-                ),
-              ),
+    void seekBack() => _seekRelative(Duration(seconds: -seekStep));
+    void seekForward() => _seekRelative(Duration(seconds: seekStep));
 
-            // Playback controls — wrapped in a Focus that intercepts D-pad
-            // Down to jump into the bottom actions row. The seek
-            // back/play/forward triplet doesn't have anything below it
-            // visually, so directional traversal would otherwise stop dead
-            // here. `skipTraversal: true` keeps this wrapper out of the
-            // tab order itself (H-DPAD-3).
-            Focus(
-              skipTraversal: true,
-              onKeyEvent: (node, event) {
-                if (event is! KeyDownEvent) return KeyEventResult.ignored;
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-                    _firstActionFocusNode.canRequestFocus) {
-                  _firstActionFocusNode.requestFocus();
-                  return KeyEventResult.handled;
-                }
-                return KeyEventResult.ignored;
-              },
-              child: PlayerCenterControls(
-                player: widget.player,
-                videoViewController: widget.videoViewController,
-                isLoading: widget.isLoading,
-                isTv: _isTv,
-                playFocusNode: _playFocusNode,
-                onSeekBackward: () =>
-                    _seekRelative(const Duration(seconds: -10)),
-                onSeekForward: () =>
-                    _seekRelative(const Duration(seconds: 10)),
-                onPlayPause: _togglePlay,
-              ),
-            ),
+    // Playback placement: touch keeps the big thumb-reach triplet centered;
+    // TV and desktop fold compact playback into the start of the controls row
+    // (where the focus anchor lives).
+    final playPause = PlayerPlayPauseButton(
+      player: widget.player,
+      videoViewController: widget.videoViewController,
+      isLoading: widget.isLoading,
+      isTv: _isTv,
+      size: 52,
+      focusNode: _playFocusNode,
+      onPressed: _togglePlay,
+    );
 
-            // Bottom overlay (slider, actions)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: GestureDetector(
-                onTap: () {},
-                onDoubleTap: () {},
-                onHorizontalDragStart: (_) {},
-                onVerticalDragStart: (_) {},
-                child: Container(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewPaddingOf(context).bottom + 14,
-                    left: 20,
-                    right: 20,
-                    top: 8,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Progress bar with StreamBuilder
-                      PlayerProgressBar(
-                        player: widget.player,
-                        videoViewController: widget.videoViewController,
-                        onSeekStart: _cancelHideTimer,
-                      ),
-                      // Actions Row — wrapped in a Focus that intercepts
-                      // D-pad Up to jump back to the center play button.
-                      // OrderedTraversalPolicy traps left/right cycling
-                      // within the row; without this wrapper, Up has
-                      // nowhere to go (H-DPAD-3).
-                      Focus(
-                        skipTraversal: true,
-                        onKeyEvent: (node, event) {
-                          if (event is! KeyDownEvent) {
-                            return KeyEventResult.ignored;
-                          }
-                          if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                              _playFocusNode.canRequestFocus) {
-                            _playFocusNode.requestFocus();
-                            return KeyEventResult.handled;
-                          }
-                          return KeyEventResult.ignored;
-                        },
-                        child: FocusTraversalGroup(
-                        policy: OrderedTraversalPolicy(),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minWidth: constraints.maxWidth,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    // Lock is only meaningful for touch
-                                    // devices (guards against accidental
-                                    // taps on bezel/edge). TV remote has
-                                    // no equivalent risk and once locked
-                                    // on TV the unlock UI is hard to
-                                    // reach via D-pad — hide the button
-                                    // entirely on TV (Bug 5).
-                                    if (!_isTv)
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(0),
-                                        child: _buildActionButton(
-                                          icon: _isLocked
-                                              ? Icons.lock
-                                              : Icons.lock_open,
-                                          label: _isLocked
-                                              ? AppLocalizations.of(
-                                                  context,
-                                                )!.unlock
-                                              : AppLocalizations.of(
-                                                  context,
-                                                )!.lock,
-                                          onTap: _toggleLock,
-                                          highlight: _isLocked,
-                                          focusNode: _firstActionFocusNode,
-                                        ),
-                                      ),
-                                    FocusTraversalOrder(
-                                      order: const NumericFocusOrder(1),
-                                      child: _buildActionButton(
-                                        icon: Icons.source,
-                                        label: AppLocalizations.of(
-                                          context,
-                                        )!.sources,
-                                        // On TV the lock button isn't
-                                        // rendered, so Sources is the
-                                        // first action — adopt the
-                                        // _firstActionFocusNode so D-pad
-                                        // Down from play still lands on
-                                        // the first visible button.
-                                        focusNode: _isTv
-                                            ? _firstActionFocusNode
-                                            : null,
-                                        onTap: () =>
-                                            PlayerBottomSheets.showSourceSelection(
-                                              context: context,
-                                              ref: ref,
-                                              streams: streams,
-                                              currentStream: currentStream,
-                                              onStreamSelected: (s) => ref
-                                                  .read(
-                                                    playerControllerProvider
-                                                        .notifier,
-                                                  )
-                                                  .changeStream(
-                                                    s,
-                                                    manualSelection: true,
-                                                  ),
-                                            ),
-                                      ),
-                                    ),
-                                    FocusTraversalOrder(
-                                      order: const NumericFocusOrder(2),
-                                      child: _buildActionButton(
-                                        icon: Icons.subtitles,
-                                        label: AppLocalizations.of(
-                                          context,
-                                        )!.tracks,
-                                        onTap: () =>
-                                            PlayerBottomSheets.showTracksSelection(
-                                              context: context,
-                                              ref: ref,
-                                              streams: streams,
-                                              currentStream: currentStream,
-                                            ),
-                                      ),
-                                    ),
-                                    if (supportsPlaybackSpeed)
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(3),
-                                        child: _buildActionButton(
-                                          icon: Icons.speed,
-                                          label:
-                                              "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
-                                          onTap: () =>
-                                              PlayerBottomSheets.showSpeedSelection(
-                                                context: context,
-                                                currentSpeed: playbackSpeed,
-                                                maxSpeed: maxPlaybackSpeed,
-                                                onSpeedSelected: (s) => ref
-                                                    .read(
-                                                      playerControllerProvider
-                                                          .notifier,
-                                                    )
-                                                    .setPlaybackSpeed(
-                                                      s,
-                                                      persist: true,
-                                                    ),
-                                              ),
-                                        ),
-                                      ),
-                                    if (torrentStatus != null)
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(4),
-                                        child: _buildActionButton(
-                                          icon: Icons.folder,
-                                          label: AppLocalizations.of(
-                                            context,
-                                          )!.content,
-                                          onTap: () =>
-                                              PlayerBottomSheets.showContentSelection(
-                                                context: context,
-                                                torrentStatus: torrentStatus,
-                                                onTorrentFileSelected: (idx) =>
-                                                    ref
-                                                        .read(
-                                                          playerControllerProvider
-                                                              .notifier,
-                                                        )
-                                                        .onTorrentFileSelected(
-                                                          idx,
-                                                        ),
-                                              ),
-                                        ),
-                                      ),
-                                    if (torrentStatus != null)
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(5),
-                                        child: _buildActionButton(
-                                          icon: Icons.info_outline,
-                                          label: AppLocalizations.of(
-                                            context,
-                                          )!.stats,
-                                          onTap: () {
-                                            setState(
-                                              () => _showTorrentInfo =
-                                                  !_showTorrentInfo,
-                                            );
-                                          },
-                                          highlight: _showTorrentInfo,
-                                        ),
-                                      ),
-                                    if (isSeries)
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(7),
-                                        child: _buildActionButton(
-                                          icon: Icons.skip_next,
-                                          label: AppLocalizations.of(
-                                            context,
-                                          )!.next,
-                                          onTap: () => ref
-                                              .read(
-                                                playerControllerProvider
-                                                    .notifier,
-                                              )
-                                              .playNextEpisode(),
-                                        ),
-                                      ),
-                                    if ((Platform.isAndroid ||
-                                            (Platform.isIOS && !_isIpad)) &&
-                                        !(ref
-                                                .read(deviceProfileProvider)
-                                                .asData
-                                                ?.value
-                                                .isTv ??
-                                            false))
-                                      FocusTraversalOrder(
-                                        order: const NumericFocusOrder(9),
-                                        child: _buildActionButton(
-                                          icon: Icons.screen_rotation,
-                                          label: AppLocalizations.of(
-                                            context,
-                                          )!.rotate,
-                                          onTap: _toggleOrientation,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+    final leading = <Widget>[
+      if (!isTouch) ...[
+        if (canSeek) ...[
+          PlayerSeekButton(
+            icon: Icons.replay_10_rounded,
+            size: 28,
+            isTv: _isTv,
+            onPressed: seekBack,
+          ),
+          const SizedBox(width: 4),
+        ],
+        playPause,
+        if (canSeek) ...[
+          const SizedBox(width: 4),
+          PlayerSeekButton(
+            icon: Icons.forward_10_rounded,
+            size: 28,
+            isTv: _isTv,
+            onPressed: seekForward,
+          ),
+        ],
+      ],
+    ];
+
+    final actions = <Widget>[
+      if (isTouch)
+        _buildActionButton(
+          icon: _isLocked ? Icons.lock : Icons.lock_open,
+          label: _isLocked ? l10n.unlock : l10n.lock,
+          onTap: _toggleLock,
+          highlight: _isLocked,
+        ),
+      _buildActionButton(
+        icon: Icons.source,
+        label: l10n.sources,
+        onTap: () => PlayerBottomSheets.showSourceSelection(
+          context: context,
+          ref: ref,
+          streams: streams,
+          currentStream: currentStream,
+          onStreamSelected: (s) => ref
+              .read(playerControllerProvider.notifier)
+              .changeStream(s, manualSelection: true),
         ),
       ),
+      _buildActionButton(
+        icon: Icons.subtitles,
+        label: l10n.tracks,
+        onTap: () => PlayerBottomSheets.showTracksSelection(
+          context: context,
+          ref: ref,
+          streams: streams,
+          currentStream: currentStream,
+        ),
       ),
+      if (supportsPlaybackSpeed)
+        _buildActionButton(
+          icon: Icons.speed,
+          label:
+              "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
+          onTap: () => PlayerBottomSheets.showSpeedSelection(
+            context: context,
+            currentSpeed: playbackSpeed,
+            maxSpeed: maxPlaybackSpeed,
+            onSpeedSelected: (s) => ref
+                .read(playerControllerProvider.notifier)
+                .setPlaybackSpeed(s, persist: true),
+          ),
+        ),
+      if (torrentStatus != null)
+        _buildActionButton(
+          icon: Icons.folder,
+          label: l10n.content,
+          onTap: () => PlayerBottomSheets.showContentSelection(
+            context: context,
+            torrentStatus: torrentStatus,
+            onTorrentFileSelected: (idx) => ref
+                .read(playerControllerProvider.notifier)
+                .onTorrentFileSelected(idx),
+          ),
+        ),
+      if (torrentStatus != null)
+        _buildActionButton(
+          icon: Icons.info_outline,
+          label: l10n.stats,
+          onTap: () => setState(() => _showTorrentInfo = !_showTorrentInfo),
+          highlight: _showTorrentInfo,
+        ),
+      if (isSeries)
+        _buildActionButton(
+          icon: Icons.skip_next,
+          label: l10n.next,
+          onTap: () =>
+              ref.read(playerControllerProvider.notifier).playNextEpisode(),
+        ),
+      if (isTouch && (Platform.isAndroid || (Platform.isIOS && !_isIpad)))
+        _buildActionButton(
+          icon: Icons.screen_rotation,
+          label: l10n.rotate,
+          onTap: _toggleOrientation,
+        ),
+    ];
+
+    final trailing = <Widget>[
+      PlayerIconButton(
+        icon: Icons.aspect_ratio_rounded,
+        tooltip: l10n.resize,
+        onPressed: cycleResize,
+        isTv: _isTv,
+      ),
+      if (Platform.isAndroid && !_isTv)
+        PlayerIconButton(
+          icon: Icons.picture_in_picture_alt_rounded,
+          tooltip: l10n.pip,
+          onPressed: _enterPip,
+          isTv: _isTv,
+        ),
+      if (isDesktop)
+        PlayerIconButton(
+          icon: _isFullscreen
+              ? Icons.fullscreen_exit_rounded
+              : Icons.fullscreen_rounded,
+          tooltip: _isFullscreen ? l10n.windowed : l10n.fullscreen,
+          onPressed: toggleFullscreen,
+          isTv: _isTv,
+        ),
+    ];
+
+    // One overlay layer: a Column with top bar / center / bottom bar. No
+    // Positioned, no magic offsets — each zone sizes to content and paints its
+    // own scrim. ExcludeFocus + IgnorePointer gate interaction while hidden;
+    // ReadingOrderTraversalPolicy gives geometric D-pad navigation so focus
+    // can always reach a neighbouring control.
+    return FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: ExcludeFocus(
+        excluding: !_isVisible,
+        child: IgnorePointer(
+          ignoring: !_isVisible,
+          child: AnimatedOpacity(
+            opacity: _isVisible ? 1.0 : 0.0,
+            duration: _animDuration,
+            child: Column(
+              children: [
+                _absorbGestures(
+                  PlayerTopBar(
+                    title: title,
+                    subtitle: subtitle,
+                    onBack: widget.onBackPointer ?? () => context.pop(),
+                    isTv: _isTv,
+                  ),
+                ),
+                // Center zone: touch keeps the big play/seek cluster; TV and
+                // desktop leave it empty (playback lives in the bottom row).
+                // No Stack here — the torrent info card is the single overlay
+                // Stack's job in build().
+                Expanded(
+                  child: isTouch
+                      ? PlayerCenterControls(
+                          player: widget.player,
+                          videoViewController: widget.videoViewController,
+                          isLoading: widget.isLoading,
+                          isTv: _isTv,
+                          canSeek: canSeek,
+                          playFocusNode: _playFocusNode,
+                          onSeekBackward: seekBack,
+                          onSeekForward: seekForward,
+                          onPlayPause: _togglePlay,
+                        )
+                      : const SizedBox.expand(),
+                ),
+                _absorbGestures(
+                  PlayerBottomBar(
+                    isTv: _isTv,
+                    progressBar: PlayerProgressBar(
+                      player: widget.player,
+                      videoViewController: widget.videoViewController,
+                      onSeekStart: _cancelHideTimer,
+                      isTv: _isTv,
+                    ),
+                    leading: leading,
+                    actions: actions,
+                    trailing: trailing,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Absorbs taps and drags over the chrome bars so interacting with the
+  /// top/bottom bars doesn't bubble up to the screen-wide gesture handler
+  /// (which would toggle visibility or fire brightness/volume swipes). Deeper
+  /// widgets (slider, buttons) still win the gesture arena.
+  Widget _absorbGestures(Widget child) {
+    return GestureDetector(
+      onTap: () {},
+      onDoubleTap: () {},
+      onVerticalDragStart: (_) {},
+      onHorizontalDragStart: (_) {},
+      child: child,
     );
   }
 

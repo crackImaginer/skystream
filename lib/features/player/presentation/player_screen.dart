@@ -18,6 +18,7 @@ import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/providers/device_info_provider.dart';
 import '../../../../features/settings/presentation/player_settings_provider.dart';
 import 'widgets/skystream_player_controls.dart';
+import 'widgets/hotstar_player_style.dart';
 import 'player_controller.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
@@ -53,6 +54,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   final ValueNotifier<bool> _controlsVisible = ValueNotifier(false);
 
   final GlobalKey<SkyStreamPlayerControlsState> _controlsKeyFinal = GlobalKey();
+
+  // The persistent root key handler. It always stays focusable (it is the
+  // parent of the ExcludeFocus'd chrome), so when the controls hide we route
+  // focus back here and the next remote/keyboard press is guaranteed to be
+  // seen — the single mechanism that keeps D-pad alive after auto-hide.
+  final FocusNode _rootFocusNode = FocusNode(debugLabel: 'player_root');
 
   bool _isTv = false;
   bool _isTablet = false;
@@ -196,26 +203,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _playerController.disposeController();
 
-    _player.dispose();
-    _videoViewController.dispose();
-    _controlsVisible.dispose();
-    _videoFit.dispose();
-
-    WakelockPlus.disable();
-
-    // Restore brightness if the user adjusted it via the gesture handler.
-    // Without this, exiting the player leaves the device at whatever dim
-    // value the user set, until they manually adjust again (audit H4).
-    // Idempotent and safe on platforms without an override active.
-    unawaited(ScreenBrightness().resetApplicationScreenBrightness());
+    // Restore the system UI FIRST, before any disposal that could throw and
+    // skip this. immersiveSticky is set for all mobile in initState, so it
+    // must always be cleared on exit (on FireTV, leaving it active also makes
+    // the system swallow hardware back-button events).
+    //
+    // Use manual + all overlays rather than edgeToEdge: leaving immersiveSticky
+    // for edgeToEdge does NOT reliably re-show the status/navigation bars on
+    // Android, so the user returns to a normal screen with the status bar
+    // still hidden. manual + SystemUiOverlay.values forces both bars back —
+    // the expected default behaviour off the player.
     if (Platform.isAndroid || Platform.isIOS) {
-      // Always restore system UI mode — immersiveSticky is set for all Android
-      // (including TV/FireTV) in initState, so it must always be cleared here.
-      // On FireTV, leaving immersiveSticky active after the player is popped
-      // causes the system to suppress hardware back-button key events.
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
       if (!_isTv) {
         if (_isTablet) {
           SystemChrome.setPreferredOrientations([]);
@@ -224,6 +227,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         }
       }
     }
+
+    _playerController.disposeController();
+
+    _player.dispose();
+    _videoViewController.dispose();
+    _controlsVisible.dispose();
+    _videoFit.dispose();
+    _rootFocusNode.dispose();
+
+    WakelockPlus.disable();
+
+    // Restore brightness if the user adjusted it via the gesture handler.
+    // Without this, exiting the player leaves the device at whatever dim
+    // value the user set, until they manually adjust again (audit H4).
+    // Idempotent and safe on platforms without an override active.
+    unawaited(ScreenBrightness().resetApplicationScreenBrightness());
     _spaceHoldTimer?.cancel();
     if (_spaceHeldForSpeed) {
       final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
@@ -242,8 +261,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     super.dispose();
   }
 
+  bool _isPlayActivationKey(KeyEvent event) =>
+      event.logicalKey == LogicalKeyboardKey.select ||
+      event.logicalKey == LogicalKeyboardKey.enter ||
+      event.logicalKey == LogicalKeyboardKey.mediaPlayPause;
+
+  /// Root key handler. Deliberately small: when a control is focused it stays
+  /// out of the way so native directional traversal + the focused control's
+  /// own activation run; it only acts when *no* control is focused (controls
+  /// hidden / video-only) or for global media shortcuts on desktop.
+  ///
+  /// `primaryFocus == node` means the root node itself holds focus — i.e. no
+  /// chrome control is focused. This is how we tell "hidden / video-only" from
+  /// "a button is focused" without any manual focus bookkeeping.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (!_isTv && event.logicalKey == LogicalKeyboardKey.space) {
+    final rootHasFocus = FocusManager.instance.primaryFocus == node;
+
+    // Space-hold → 2× speed (non-TV). Only when no control is focused, so
+    // Space still activates a focused button normally.
+    if (!_isTv &&
+        rootHasFocus &&
+        event.logicalKey == LogicalKeyboardKey.space) {
       if (event is KeyDownEvent) {
         _spaceHoldTimer ??= Timer(const Duration(milliseconds: 260), () {
           if (!mounted || _spaceHeldForSpeed) return;
@@ -276,9 +314,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         _spaceHoldTimer = null;
         if (!_spaceHeldForSpeed) {
           _controlsKeyFinal.currentState?.togglePlayPause();
-          if (!_controlsVisible.value) {
-            _controlsKeyFinal.currentState?.showControls();
-          }
+          _controlsKeyFinal.currentState?.onUserInteraction();
           return KeyEventResult.handled;
         }
         final previousSpeed = _speedBeforeSpaceHold ?? 1.0;
@@ -293,98 +329,87 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       }
     }
 
-    // Only handle KeyDown and KeyRepeat for volume/seeking
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
 
-    // TV Navigation Logic
-    if (_isTv) {
-      if (_controlsVisible.value) {
-        if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-            event.logicalKey == LogicalKeyboardKey.arrowDown ||
-            event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-            event.logicalKey == LogicalKeyboardKey.arrowRight ||
-            event.logicalKey == LogicalKeyboardKey.select ||
-            event.logicalKey == LogicalKeyboardKey.enter) {
-          return KeyEventResult.ignored;
+    // A chrome control is focused: let it activate (select/enter/space via
+    // Shortcuts + Material) and let arrows drive directional traversal. On
+    // desktop we still honor the media convention of ←/→/↑/↓ seeking/volume.
+    if (!rootHasFocus) {
+      if (!_isTv) {
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          _controlsKeyFinal.currentState?.triggerSeek(true);
+          return KeyEventResult.handled;
         }
-      } else {
-        // Hidden-controls input policy on TV:
-        // - Any key shows the controls (focus snaps back to play button).
-        // - Up/Down do ONLY that — don't fall through to the seek/volume
-        //   handlers below (they'd be confusing on TV where Up/Down has no
-        //   playback meaning).
-        // - Left/Right/Select/Enter show controls AND fall through, so the
-        //   user sees both the action and the freshly-visible overlay.
-        // Fixes Bug 3 + Bug 4 — without this, hidden focus on a top-right
-        // utility button could intercept arrow keys via the focus system
-        // before the root handler ever saw them.
-        _controlsKeyFinal.currentState?.showControls();
-        if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          _controlsKeyFinal.currentState?.triggerSeek(false);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _controlsKeyFinal.currentState?.changeVolume(0.05);
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _controlsKeyFinal.currentState?.changeVolume(-0.05);
           return KeyEventResult.handled;
         }
       }
+      return KeyEventResult.ignored;
     }
 
-    // Intercept standard playback keys
-    if (event.logicalKey == LogicalKeyboardKey.select ||
-        event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.mediaPlayPause) {
-      _controlsKeyFinal.currentState?.togglePlayPause();
-      // Always treat as user interaction so the hide-idle timer resets.
-      // `onUserInteraction` shows the controls if they're hidden and
-      // restarts the 3 s hide countdown — so spamming play/pause from
-      // the remote doesn't let controls vanish mid-press.
-      _controlsKeyFinal.currentState?.onUserInteraction();
+    // From here the root has focus — no control is focused (controls hidden
+    // or video-only). On TV, the first press just reveals the controls (and
+    // play/select also toggles playback); focus then snaps to play/pause.
+    if (_isTv && !_controlsVisible.value) {
+      _controlsKeyFinal.currentState?.showControls();
+      if (_isPlayActivationKey(event)) {
+        _controlsKeyFinal.currentState?.togglePlayPause();
+      }
       return KeyEventResult.handled;
     }
 
+    // Global media shortcuts (root-focused on any platform).
+    if (_isPlayActivationKey(event)) {
+      _controlsKeyFinal.currentState?.togglePlayPause();
+      _controlsKeyFinal.currentState?.onUserInteraction();
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.keyM) {
       _controlsKeyFinal.currentState?.toggleMute();
       _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
-
     if (event.logicalKey == LogicalKeyboardKey.keyZ) {
       _controlsKeyFinal.currentState?.cycleResize();
       _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
-
     if (event.logicalKey == LogicalKeyboardKey.keyF) {
       _controlsKeyFinal.currentState?.toggleFullscreen();
       _controlsKeyFinal.currentState?.onUserInteraction();
       return KeyEventResult.handled;
     }
 
-    if (!_isTv) {
-      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-        _controlsKeyFinal.currentState?.changeVolume(0.05);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-        _controlsKeyFinal.currentState?.changeVolume(-0.05);
-        return KeyEventResult.handled;
-      }
-    }
+    // TV with controls already visible but focus on root (rare/transient) —
+    // leave arrows for traversal.
+    if (_isTv) return KeyEventResult.ignored;
 
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      _controlsKeyFinal.currentState?.triggerSeek(true);
-      // triggerSeek internally calls _seekRelative which restarts the
-      // hide-timer — no extra onUserInteraction call needed.
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _controlsKeyFinal.currentState?.changeVolume(0.05);
       return KeyEventResult.handled;
     }
-
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _controlsKeyFinal.currentState?.changeVolume(-0.05);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _controlsKeyFinal.currentState?.triggerSeek(true);
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
       _controlsKeyFinal.currentState?.triggerSeek(false);
       return KeyEventResult.handled;
-    }
-
-    if (_controlsVisible.value &&
-        event.logicalKey == LogicalKeyboardKey.escape) {
-      return KeyEventResult.ignored;
     }
 
     return KeyEventResult.ignored;
@@ -500,115 +525,135 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           },
           child: Scaffold(
             body: Focus(
+              focusNode: _rootFocusNode,
               autofocus: true,
               onKeyEvent: _handleKey,
-              child: Stack(
-                children: [
-                  RepaintBoundary(
-                    child: ValueListenableBuilder<BoxFit>(
-                      valueListenable: _videoFit,
-                      builder: (_, fit, child) => Center(
-                        // Phase 8: Switch engine based on stream type
-                        child: Consumer(
-                          builder: (context, ref, _) {
-                            final useExoPlayer = ref.watch(
-                              playerControllerProvider.select(
-                                (s) => s.useExoPlayer,
-                              ),
-                            );
-                            if (useExoPlayer) {
-                              return vv.VideoView(
-                                controller: _videoViewController,
-                                videoFit: fit,
+              // Map the TV remote OK key (select) to ActivateIntent so the
+              // focused control activates natively (Enter/Space/gameButtonA are
+              // already mapped by WidgetsApp). When no control is focused this
+              // bubbles up to the root handler instead.
+              child: Shortcuts(
+                shortcuts: const <ShortcutActivator, Intent>{
+                  SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+                },
+                child: Stack(
+                  children: [
+                    RepaintBoundary(
+                      child: ValueListenableBuilder<BoxFit>(
+                        valueListenable: _videoFit,
+                        builder: (_, fit, child) => Center(
+                          // Phase 8: Switch engine based on stream type
+                          child: Consumer(
+                            builder: (context, ref, _) {
+                              final useExoPlayer = ref.watch(
+                                playerControllerProvider.select(
+                                  (s) => s.useExoPlayer,
+                                ),
                               );
-                            }
-                            return Video(
-                              controller: _videoController,
-                              fit: fit,
-                              subtitleViewConfiguration:
-                                  const SubtitleViewConfiguration(
-                                    visible: false,
-                                    style: TextStyle(color: Colors.transparent),
+                              if (useExoPlayer) {
+                                return vv.VideoView(
+                                  controller: _videoViewController,
+                                  videoFit: fit,
+                                );
+                              }
+                              return Video(
+                                controller: _videoController,
+                                fit: fit,
+                                subtitleViewConfiguration:
+                                    const SubtitleViewConfiguration(
+                                      visible: false,
+                                      style: TextStyle(
+                                        color: Colors.transparent,
+                                      ),
+                                    ),
+                                controls: (state) => const SizedBox.shrink(),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final useExoPlayer = ref.watch(
+                          playerControllerProvider.select(
+                            (s) => s.useExoPlayer,
+                          ),
+                        );
+                        if (useExoPlayer) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Positioned(
+                          bottom:
+                              (controlsVisible
+                                  ? HotstarPlayerStyle.bottomChromeHeight
+                                  : 20.0) +
+                              ((100 -
+                                      (subtitleSettings?.subtitlePosition ??
+                                          100.0)) *
+                                  (MediaQuery.sizeOf(context).height * 0.008)),
+                          left: 20,
+                          right: 20,
+                          child: SubtitleView(
+                            controller: _videoController,
+                            configuration: SubtitleViewConfiguration(
+                              style: TextStyle(
+                                fontSize:
+                                    subtitleSettings?.subtitleSize ?? 22.0,
+                                color: Color(
+                                  subtitleSettings?.subtitleColor ?? 0xFFFFFFFF,
+                                ),
+                                backgroundColor:
+                                    Color(
+                                      subtitleSettings
+                                              ?.subtitleBackgroundColor ??
+                                          0x00000000,
+                                    ).withValues(
+                                      alpha:
+                                          subtitleSettings
+                                              ?.subtitleBackgroundOpacity ??
+                                          0.0,
+                                    ),
+                                shadows: const [
+                                  Shadow(
+                                    offset: Offset(0, 1),
+                                    blurRadius: 2,
+                                    color: Colors.black,
                                   ),
-                              controls: (state) => const SizedBox.shrink(),
-                            );
+                                ],
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    Positioned.fill(
+                      child: RepaintBoundary(
+                        child: SkyStreamPlayerControls(
+                          key: _controlsKeyFinal,
+                          isLoading: isLoading,
+                          player: _player,
+                          videoViewController: _videoViewController,
+                          title: widget.item.title,
+                          subtitle: ref
+                              .read(playerControllerProvider)
+                              .streamSubtitle,
+                          onResize: _updateResizeMode,
+                          onBackPointer: _handleBack,
+                          onRequestRootFocus: () =>
+                              _rootFocusNode.requestFocus(),
+                          onVisibilityChanged: (v) {
+                            if (mounted) {
+                              _controlsVisible.value = v;
+                            }
                           },
                         ),
                       ),
                     ),
-                  ),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final useExoPlayer = ref.watch(
-                        playerControllerProvider.select((s) => s.useExoPlayer),
-                      );
-                      if (useExoPlayer) {
-                        return const SizedBox.shrink();
-                      }
-
-                      return Positioned(
-                        bottom:
-                            (controlsVisible ? 120.0 : 20.0) +
-                            ((100 -
-                                    (subtitleSettings?.subtitlePosition ??
-                                        100.0)) *
-                                (MediaQuery.sizeOf(context).height * 0.008)),
-                        left: 20,
-                        right: 20,
-                        child: SubtitleView(
-                          controller: _videoController,
-                          configuration: SubtitleViewConfiguration(
-                            style: TextStyle(
-                              fontSize: subtitleSettings?.subtitleSize ?? 22.0,
-                              color: Color(
-                                subtitleSettings?.subtitleColor ?? 0xFFFFFFFF,
-                              ),
-                              backgroundColor:
-                                  Color(
-                                    subtitleSettings?.subtitleBackgroundColor ??
-                                        0x00000000,
-                                  ).withValues(
-                                    alpha:
-                                        subtitleSettings
-                                            ?.subtitleBackgroundOpacity ??
-                                        0.0,
-                                  ),
-                              shadows: const [
-                                Shadow(
-                                  offset: Offset(0, 1),
-                                  blurRadius: 2,
-                                  color: Colors.black,
-                                ),
-                              ],
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  Positioned.fill(
-                    child: RepaintBoundary(
-                      child: SkyStreamPlayerControls(
-                        key: _controlsKeyFinal,
-                        isLoading: isLoading,
-                        player: _player,
-                        videoViewController: _videoViewController,
-                        title: widget.item.title,
-                        subtitle: ref
-                            .read(playerControllerProvider)
-                            .streamSubtitle,
-                        onResize: _updateResizeMode,
-                        onBackPointer: _handleBack,
-                        onVisibilityChanged: (v) {
-                          if (mounted) {
-                            _controlsVisible.value = v;
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

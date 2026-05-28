@@ -1,34 +1,26 @@
 import 'package:flutter/material.dart';
+import 'hotstar_player_style.dart';
 
-/// Shared anchor for player prompts that should sit near the seek bar.
-///
-/// The right inset matches the seek bar's effective padding:
-/// bottom controls horizontal padding (20) + progress bar padding (18).
+/// Shared anchor for player prompts (resume / next-episode / skip) that should
+/// sit just above the bottom chrome, right-aligned. Derives its inset from the
+/// single [HotstarPlayerStyle.bottomChromeHeight] token so it stays in sync
+/// with the bottom bar instead of repeating its magic numbers.
 class PlayerPromptPlacement extends StatelessWidget {
   const PlayerPromptPlacement({super.key, required this.child});
 
   final Widget child;
 
-  static const double _rightInset = 38;
-  static const double _bottomControlsPadding = 14;
-  static const double _actionsRowHeight = 40;
-  static const double _progressBarHeight = 58;
-  static const double _bottomControlsTopPadding = 8;
-  static const double _gapAboveSeekBar = 8;
+  static const double _gapAboveChrome = 12;
 
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
-    const bottomInset =
-        _bottomControlsPadding +
-        _actionsRowHeight +
-        _progressBarHeight +
-        _bottomControlsTopPadding +
-        _gapAboveSeekBar;
-
     return Positioned(
-      right: _rightInset + padding.right,
-      bottom: bottomInset + padding.bottom,
+      right: HotstarPlayerStyle.edgeInset + padding.right,
+      bottom:
+          HotstarPlayerStyle.bottomChromeHeight +
+          _gapAboveChrome +
+          padding.bottom,
       child: child,
     );
   }
