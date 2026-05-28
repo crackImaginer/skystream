@@ -8,7 +8,6 @@ import 'search_provider.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'widgets/search_result_section.dart';
 import 'widgets/search_header_bar.dart';
-import '../../../shared/widgets/cards_wrapper.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});

@@ -422,7 +422,10 @@ class MultimediaItem {
           provider == other.provider &&
           tmdbId == other.tmdbId &&
           imdbId == other.imdbId &&
-          const MapEquality().equals(syncData, other.syncData);
+          const MapEquality<String, String>().equals(
+            syncData,
+            other.syncData,
+          );
 
   @override
   int get hashCode =>
@@ -432,7 +435,7 @@ class MultimediaItem {
       (provider?.hashCode ?? 0) ^
       (tmdbId?.hashCode ?? 0) ^
       (imdbId?.hashCode ?? 0) ^
-      const MapEquality().hash(syncData);
+      const MapEquality<String, String>().hash(syncData);
 }
 
 class Episode {

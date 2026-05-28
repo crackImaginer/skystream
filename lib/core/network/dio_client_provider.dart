@@ -4,6 +4,7 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'doh_service.dart';
+import 'http_defaults.dart';
 
 part 'dio_client_provider.g.dart';
 
@@ -13,6 +14,10 @@ Dio dioClient(Ref ref) {
     BaseOptions(
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
+      // Default to a real browser UA so resolution presents the same
+      // identity the player will use during playback. Per-request headers
+      // from plugins still override this. See http_defaults.dart.
+      headers: const {'User-Agent': kDefaultBrowserUserAgent},
     ),
   );
 

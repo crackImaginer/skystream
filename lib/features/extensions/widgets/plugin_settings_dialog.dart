@@ -115,9 +115,11 @@ class _PluginSettingsDialogState extends ConsumerState<PluginSettingsDialog> {
                           title: Text(d.name),
                           leading: Focus(
                             canRequestFocus: false,
-                            child: Radio<String>(value: d.url, groupValue: _selectedDomain, onChanged: (val) {
-                              if (val != null) _applyDomain(val);
-                            }),
+                            // Selection state + change handling come from the
+                            // enclosing RadioGroup<String> ancestor; the Radio
+                            // only declares its own value (groupValue/onChanged
+                            // here are deprecated post-Flutter 3.32).
+                            child: Radio<String>(value: d.url),
                           ),
                           onTap: _reloading ? null : () => _applyDomain(d.url),
                         );

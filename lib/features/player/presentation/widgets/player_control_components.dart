@@ -239,9 +239,14 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
   @override
   Widget build(BuildContext context) {
     final isActive = widget.highlight || _hovered || _focused || _pressed;
+    // Use the theme primary so the focus ring / glow / active tint match
+    // the play-pause + seek buttons (which go through CustomButton and use
+    // colorScheme.primary). Previously this used the fixed Hotstar accent
+    // blue, making bottom-row buttons look different from the center ones.
+    final primaryColor = Theme.of(context).colorScheme.primary;
     // On TV, focused state needs a high-contrast indicator (border + glow +
-    // slight scale) — the existing accent-tint alone is invisible at 3-4 m
-    // viewing distance. Mouse hover still uses the lighter tint.
+    // slight scale) — the tint alone is invisible at 3-4 m viewing distance.
+    // Mouse hover still uses the lighter tint.
     final showTvFocusRing = widget.isTv && _focused;
 
     return FocusTraversalOrder(
@@ -290,21 +295,16 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                   padding: const EdgeInsets.symmetric(horizontal: 9),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? HotstarPlayerStyle.accent.withValues(alpha: 0.16)
+                        ? primaryColor.withValues(alpha: 0.16)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(6),
                     border: showTvFocusRing
-                        ? Border.all(
-                            color: HotstarPlayerStyle.accent,
-                            width: 2,
-                          )
+                        ? Border.all(color: primaryColor, width: 2)
                         : null,
                     boxShadow: showTvFocusRing
                         ? [
                             BoxShadow(
-                              color: HotstarPlayerStyle.accent.withValues(
-                                alpha: 0.55,
-                              ),
+                              color: primaryColor.withValues(alpha: 0.55),
                               blurRadius: 14,
                               spreadRadius: 1,
                             ),
@@ -322,9 +322,7 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                           angle: value * 3.14159,
                           child: Icon(
                             widget.icon,
-                            color: isActive
-                                ? HotstarPlayerStyle.accent
-                                : Colors.white,
+                            color: isActive ? primaryColor : Colors.white,
                             size: 20,
                           ),
                         );
@@ -335,7 +333,7 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
                       widget.label,
                       style: TextStyle(
                         color: isActive
-                            ? HotstarPlayerStyle.accent
+                            ? primaryColor
                             : HotstarPlayerStyle.primaryText,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,

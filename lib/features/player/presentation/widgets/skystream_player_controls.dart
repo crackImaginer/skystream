@@ -457,6 +457,20 @@ class SkyStreamPlayerControlsState
 
   // ... (keeping other methods same)
 
+  /// Drop focus from whatever control was focused when the overlay hides.
+  /// ExcludeFocus makes the descendants non-focusable, but the node that
+  /// already had focus stays "primary" until something else claims it —
+  /// which means a hidden button (e.g. the top-right aspect-ratio button)
+  /// could still swallow an OK/arrow press. Explicitly returning focus to
+  /// the enclosing scope (the PlayerScreen root Focus) guarantees the next
+  /// key press reaches the root handler, which re-shows the controls and
+  /// re-focuses the play button.
+  void _dropFocusToRoot() {
+    if (!_isTv) return;
+    final primary = FocusManager.instance.primaryFocus;
+    primary?.unfocus();
+  }
+
   void _toggleVisibility() {
     _animDuration = const Duration(milliseconds: 300);
     setState(() {
@@ -466,6 +480,8 @@ class SkyStreamPlayerControlsState
     if (_isVisible) {
       _startHideTimer();
       if (_isTv) _playFocusNode.requestFocus();
+    } else {
+      _dropFocusToRoot();
     }
   }
 
@@ -474,6 +490,7 @@ class SkyStreamPlayerControlsState
       _hideTimer?.cancel();
       setState(() => _isVisible = false);
       widget.onVisibilityChanged?.call(false);
+      _dropFocusToRoot();
     }
   }
 
@@ -510,6 +527,7 @@ class SkyStreamPlayerControlsState
           _isVisible = false;
         });
         widget.onVisibilityChanged?.call(false);
+        _dropFocusToRoot();
       }
     });
   }
@@ -519,6 +537,11 @@ class SkyStreamPlayerControlsState
       if (!_isVisible) {
         setState(() => _isVisible = true);
         widget.onVisibilityChanged?.call(true);
+        // Controls were hidden and an action (OK / mute / resize) brought
+        // them back — restore focus to the play button so the user has a
+        // live anchor to navigate from. Without this, OK-while-hidden
+        // showed the controls but left nothing focused, stranding D-pad.
+        if (_isTv) _playFocusNode.requestFocus();
       }
       _startHideTimer();
     }

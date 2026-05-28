@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -208,8 +210,8 @@ class DetailsController extends _$DetailsController {
           item: withProvider.copyWith(episodes: sortedEpisodes),
         );
 
-        // Run Metadata Resolution in background silently
-        _resolveMetadataInBackground(withProvider);
+        // Run Metadata Resolution in background silently (fire-and-forget).
+        unawaited(_resolveMetadataInBackground(withProvider));
       } else {
         throw Exception("No provider selected or found for this item");
       }

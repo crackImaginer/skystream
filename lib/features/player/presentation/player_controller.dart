@@ -30,11 +30,11 @@ import '../../../../core/utils/app_utils.dart';
 import '../../settings/presentation/player_settings_provider.dart';
 import '../../settings/presentation/general_settings_provider.dart';
 import '../../../../core/services/local_proxy_service.dart';
+import '../../../../core/network/http_defaults.dart';
 import '../../../../core/utils/stream_quality_sorter.dart';
 import '../../skip/data/intro_db_service.dart';
 import '../../skip/data/anime_skip_service.dart';
 import '../../skip/data/skip_service.dart';
-import '../../tracking/data/simkl_service.dart';
 import '../../../../core/storage/settings_repository.dart';
 
 // Sentinel so copyWith can distinguish "not passed" from "explicitly null".
@@ -420,6 +420,22 @@ class PlayerController extends Notifier<PlayerState> {
     return true;
   }
 
+  /// Build the header map handed to the player (mpv + video_view). Clones
+  /// the plugin's headers so we never mutate the StreamResult, and injects a
+  /// real browser User-Agent when the plugin didn't supply one — see
+  /// http_defaults.dart for why this matters (resolve/playback identity
+  /// match + per-platform libmpv default-UA divergence).
+  Map<String, String> _buildPlaybackHeaders(StreamResult stream) {
+    final headers = <String, String>{...?stream.headers};
+    final hasUserAgent = headers.keys.any(
+      (k) => k.toLowerCase() == 'user-agent',
+    );
+    if (!hasUserAgent) {
+      headers['User-Agent'] = kDefaultBrowserUserAgent;
+    }
+    return headers;
+  }
+
   bool get _videoViewSupportsMergedExternalSubtitles => Platform.isAndroid;
 
   // Track last saved position for threshold-based saving
@@ -486,6 +502,21 @@ class PlayerController extends Notifier<PlayerState> {
   double _lastNonZeroVolumeLevel = 1.0;
   final List<SubtitleFile> _userAddedExternalSubtitles = [];
   bool _hasConfirmedPlaybackFrame = false;
+
+  // RC1 — when a stream fails to start with a decode/codec error (common on
+  // weak TV hardware decoders like FireTV's MediaCodec), we retry the same
+  // source once with hardware decoding off. This flag forces `hwdec: no` in
+  // _applyPlaybackProperties for the rest of the session. Reset only on a new
+  // item (init), not per-source, because a broken HW decoder affects every
+  // source equally.
+  bool _forceSoftwareDecode = false;
+
+  // Bug 4 — provider stream URLs are usually short-lived signed links. After
+  // a long pause the token expires; on resume the fetch 403/410s. We
+  // re-resolve the SAME source once (fresh URL, same position) before falling
+  // back to a different source. Reset on every confirmed playback frame so
+  // each playback session gets one re-resolve attempt.
+  bool _staleUrlReResolveAttempted = false;
   bool _suppressNextEpisodeDetection = false;
   bool _isNextEpisodeOverlayForced = false;
   bool _manualSelectionPending = false;
@@ -678,6 +709,11 @@ class PlayerController extends Notifier<PlayerState> {
   void _confirmPlaybackStarted() {
     _hasConfirmedPlaybackFrame = true;
     _manualSelectionPending = false; // source played — no longer pending
+    // A frame confirmed → this playback session is healthy. Re-arm the
+    // one-shot stale-URL re-resolve so the NEXT expiry (e.g. after another
+    // long pause) is also handled rather than falling straight to a
+    // different source.
+    _staleUrlReResolveAttempted = false;
     // Do NOT reset _suppressNextEpisodeDetection here. At the moment position
     // first exceeds zero, _player.state.duration may still hold the previous
     // episode's value (mpv resets it asynchronously). Resetting here would
@@ -734,6 +770,9 @@ class PlayerController extends Notifier<PlayerState> {
     _hasConfirmedPlaybackFrame = false;
     _manualSelectionPending = false;
     _revertMessage = null;
+    // New item — reset session-scoped recovery flags.
+    _forceSoftwareDecode = false;
+    _staleUrlReResolveAttempted = false;
     _player = player;
     _videoViewController = videoViewController;
     _videoUrl = videoUrl;
@@ -861,8 +900,8 @@ class PlayerController extends Notifier<PlayerState> {
     }
 
     final List<SkipSegment> allSegments = [];
-    int season = _episode!.season > 0 ? _episode!.season : 1;
-    int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
+    final int season = _episode!.season > 0 ? _episode!.season : 1;
+    final int episodeNum = _episode!.episode > 0 ? _episode!.episode : 1;
 
     // 1. Fetch from IntroDB (for both Anime and Western TV Shows/Movies)
     final settingsRepo = ref.read(settingsRepositoryProvider);
@@ -911,7 +950,7 @@ class PlayerController extends Notifier<PlayerState> {
     if (isAnime) {
       if (settingsRepo.isAnimeSkipIntegrationEnabled()) {
         try {
-          var anilistId =
+          final anilistId =
               _item.syncData?['anilist'] ??
               _item.syncData?['anilistId'] ??
               _item.syncData?['anilist_id'];
@@ -1228,8 +1267,9 @@ class PlayerController extends Notifier<PlayerState> {
 
   void forceNextEpisodeOverlay() {
     if (_item.contentType != MultimediaContentType.series &&
-        _item.contentType != MultimediaContentType.anime)
+        _item.contentType != MultimediaContentType.anime) {
       return;
+    }
 
     int? currentIndex;
     if (_episode != null) {
@@ -1481,6 +1521,38 @@ class PlayerController extends Notifier<PlayerState> {
 
       if (!_hasConfirmedPlaybackFrame ||
           _player.state.position == Duration.zero) {
+        // RC1: a source that fails to produce its first frame with a
+        // decode/codec/hardware error is usually the hardware decoder
+        // choking (FireTV MediaCodec rejecting a profile the phone
+        // accepts). Before burning through every source, flip to software
+        // decoding once and retry the SAME source. If it still fails,
+        // _forceSoftwareDecode is already set so we fall through to the
+        // next source.
+        final errLower = error.toString().toLowerCase();
+        final looksLikeDecodeFailure =
+            errLower.contains('decod') ||
+            errLower.contains('codec') ||
+            errLower.contains('hwdec') ||
+            errLower.contains('hardware') ||
+            errLower.contains('mediacodec') ||
+            errLower.contains('vo ') ||
+            errLower.contains('video output');
+        if (looksLikeDecodeFailure &&
+            !_forceSoftwareDecode &&
+            state.currentStream != null) {
+          _forceSoftwareDecode = true;
+          if (kDebugMode) {
+            debugPrint(
+              '[Player] Decode/HW error before first frame — retrying '
+              'current source with software decoding.',
+            );
+          }
+          unawaited(
+            changeStream(state.currentStream!, resetPosition: true),
+          );
+          return;
+        }
+
         // Error before playback confirmed — try next source.
         _markSourceAttempt(
           state.currentStreamIndex,
@@ -1509,6 +1581,31 @@ class PlayerController extends Notifier<PlayerState> {
           );
           return;
         }
+        // Bug 4: a source that played fine and then errors mid-playback is
+        // almost always an expired signed URL (the user paused past the
+        // token TTL, or the CDN rotated the link). Re-resolve the SAME
+        // source once — it returns a fresh URL and resumes at the saved
+        // position — instead of switching to a worse/different source.
+        // Only fall back to a different source if the re-resolve also
+        // fails (changeStream → revertToPreviousStream on error).
+        if (!_staleUrlReResolveAttempted && state.currentStream != null) {
+          _staleUrlReResolveAttempted = true;
+          if (kDebugMode) {
+            debugPrint(
+              '[Player] Mid-playback error — re-resolving current source '
+              '(likely expired stream URL).',
+            );
+          }
+          _enterRuntimePhase(
+            kind: PlaybackUiPhaseKind.switchingSource,
+            detail: "Refreshing stream...",
+          );
+          unawaited(
+            changeStream(state.currentStream!, resetPosition: false),
+          );
+          return;
+        }
+
         _markSourceAttempt(
           state.currentStreamIndex,
           SourceAttemptStatus.failed,
@@ -2549,7 +2646,7 @@ class PlayerController extends Notifier<PlayerState> {
         );
       }
 
-      final headers = stream.headers ?? {};
+      final headers = _buildPlaybackHeaders(stream);
       await _applyPlaybackProperties(
         headers,
         stream,
@@ -2811,7 +2908,7 @@ class PlayerController extends Notifier<PlayerState> {
         stopTorrentPolling();
       }
 
-      final headers = stream.headers ?? {};
+      final headers = _buildPlaybackHeaders(stream);
       await _applyPlaybackProperties(
         headers,
         stream,
@@ -3644,8 +3741,12 @@ class PlayerController extends Notifier<PlayerState> {
       // 0. Hardware decoding preference
       // Use auto-safe on Windows: 'auto' enables D3D11VA which can crash during
       // DASH manifest negotiation before codec parameters are fully known.
+      // RC1: once a decode/codec failure has forced software decoding for this
+      // session (weak TV decoder etc.), always use 'no' regardless of setting.
       final settings = ref.read(playerSettingsProvider).asData?.value;
-      if (settings?.hardwareDecoding ?? true) {
+      if (_forceSoftwareDecode) {
+        await native.setProperty('hwdec', 'no');
+      } else if (settings?.hardwareDecoding ?? true) {
         await native.setProperty(
           'hwdec',
           Platform.isWindows ? 'auto-safe' : 'auto',
@@ -3653,6 +3754,15 @@ class PlayerController extends Notifier<PlayerState> {
       } else {
         await native.setProperty('hwdec', 'no');
       }
+
+      // RC3: disable TLS cert verification for VOD too (was previously only
+      // set on the live path). The libmpv builds differ per platform — the
+      // shinchiro Windows build and the bundled macOS build ship
+      // differently-aged CA bundles, so a stream whose cert chain validates
+      // on Windows can fail the TLS handshake on macOS. Disabling cert
+      // verification removes that per-build divergence. This matches the
+      // existing posture (live already did this; usesCleartextTraffic is on).
+      await native.setProperty('tls-verify', 'no');
 
       // 1. Performance tuning & Anti-Looping
       await native.setProperty('cache', 'yes');
