@@ -113,7 +113,12 @@ class _PluginSettingsDialogState extends ConsumerState<PluginSettingsDialog> {
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           title: Text(d.name),
-                          leading: Radio<String>(value: d.url),
+                          leading: Focus(
+                            canRequestFocus: false,
+                            child: Radio<String>(value: d.url, groupValue: _selectedDomain, onChanged: (val) {
+                              if (val != null) _applyDomain(val);
+                            }),
+                          ),
                           onTap: _reloading ? null : () => _applyDomain(d.url),
                         );
                       }).toList(),

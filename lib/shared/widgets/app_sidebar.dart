@@ -255,7 +255,8 @@ class _SidebarItemState extends State<_SidebarItem> {
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent) {
             if (event.logicalKey == LogicalKeyboardKey.select ||
-                event.logicalKey == LogicalKeyboardKey.enter) {
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space) {
               widget.onTap();
               return KeyEventResult.handled;
             }

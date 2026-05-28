@@ -535,8 +535,16 @@ class ExtensionsController extends _$ExtensionsController {
           final currentInstalling = Set<String>.from(state.installingPlugins)
             ..remove(plugin.packageName);
 
+          final newInstalled = List<ExtensionPlugin>.from(state.installedPlugins);
+          final existingIndex = newInstalled.indexWhere((p) => p.packageName == plugin.packageName);
+          if (existingIndex >= 0) {
+            newInstalled[existingIndex] = plugin;
+          } else {
+            newInstalled.add(plugin);
+          }
+
           state = ExtensionsSuccess(
-            installedPlugins: state.installedPlugins,
+            installedPlugins: newInstalled,
             repositories: state.repositories,
             availablePlugins: state.availablePlugins,
             availableUpdates: newUpdates,

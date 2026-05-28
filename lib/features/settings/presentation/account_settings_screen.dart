@@ -19,8 +19,27 @@ import '../../tracking/data/mal_service.dart';
 import '../../tracking/data/anilist_service.dart';
 import '../../../core/storage/settings_repository.dart';
 
-class AccountSettingsScreen extends ConsumerWidget {
+class AccountSettingsScreen extends ConsumerStatefulWidget {
   const AccountSettingsScreen({super.key});
+
+  @override
+  ConsumerState<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
+}
+
+class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
+  final FocusNode _simklFocusNode = FocusNode();
+  final FocusNode _traktFocusNode = FocusNode();
+  final FocusNode _malFocusNode = FocusNode();
+  final FocusNode _anilistFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _simklFocusNode.dispose();
+    _traktFocusNode.dispose();
+    _malFocusNode.dispose();
+    _anilistFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<bool> _confirmDisconnect(
     BuildContext context,
@@ -52,7 +71,7 @@ class AccountSettingsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final playerSettings =
         ref.watch(playerSettingsProvider).asData?.value ??
@@ -108,6 +127,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SettingsTile(
+                            focusNode: _simklFocusNode,
                             icon: Icons.sync_rounded,
                             title: 'Simkl',
                             subtitle: trackingAuthAsync.when(
@@ -187,6 +207,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                             },
                           ),
                           SettingsTile(
+                            focusNode: _traktFocusNode,
                             icon: Icons.sync_rounded,
                             title: 'Trakt',
                             subtitle: trackingAuthAsync.when(
@@ -207,7 +228,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                                   await ref.read(traktServiceProvider).logout();
                                   ref.invalidate(trackingAuthProvider);
                                   if (context.mounted) {
-                                    FocusScope.of(context).requestFocus();
+                                    _traktFocusNode.requestFocus();
                                   }
                                 }
                               } else {
@@ -237,9 +258,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                                               isCancelled = true;
                                               isDialogShowing = false;
                                               if (context.mounted) {
-                                                FocusScope.of(
-                                                  context,
-                                                ).requestFocus();
+                                                _traktFocusNode.requestFocus();
                                               }
                                             }),
                                           );
@@ -266,6 +285,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                             },
                           ),
                           SettingsTile(
+                            focusNode: _malFocusNode,
                             icon: Icons.sync_rounded,
                             title: 'MyAnimeList',
                             subtitle: trackingAuthAsync.when(
@@ -286,7 +306,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                                   await ref.read(malServiceProvider).logout();
                                   ref.invalidate(trackingAuthProvider);
                                   if (context.mounted) {
-                                    FocusScope.of(context).requestFocus();
+                                    _malFocusNode.requestFocus();
                                   }
                                 }
                               } else {
@@ -329,12 +349,16 @@ class AccountSettingsScreen extends ConsumerWidget {
                                       );
                                     }
                                   }
+                                  if (context.mounted) {
+                                    _malFocusNode.requestFocus();
+                                  }
                                 }
                               }
                               ref.invalidate(trackingAuthProvider);
                             },
                           ),
                           SettingsTile(
+                            focusNode: _anilistFocusNode,
                             icon: Icons.sync_rounded,
                             title: 'AniList',
                             subtitle: trackingAuthAsync.when(
@@ -358,7 +382,7 @@ class AccountSettingsScreen extends ConsumerWidget {
                                       .logout();
                                   ref.invalidate(trackingAuthProvider);
                                   if (context.mounted) {
-                                    FocusScope.of(context).requestFocus();
+                                    _anilistFocusNode.requestFocus();
                                   }
                                 }
                               } else {
@@ -395,6 +419,9 @@ class AccountSettingsScreen extends ConsumerWidget {
                                         ),
                                       );
                                     }
+                                  }
+                                  if (context.mounted) {
+                                    _anilistFocusNode.requestFocus();
                                   }
                                 }
                               }

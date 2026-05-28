@@ -49,6 +49,7 @@ class SettingsTile extends StatefulWidget {
   final VoidCallback? onTap;
   final bool isLast;
   final bool isBeta;
+  final FocusNode? focusNode;
 
   const SettingsTile({
     super.key,
@@ -59,6 +60,7 @@ class SettingsTile extends StatefulWidget {
     this.onTap,
     this.isLast = false,
     this.isBeta = false,
+    this.focusNode,
   });
 
   @override
@@ -78,6 +80,7 @@ class _SettingsTileState extends State<SettingsTile> {
           // the actual focus target (it's what handles onTap when OK is
           // pressed). hasFocus on this node reflects "any descendant focused"
           // so onFocusChange still fires when the tile is reached.
+          focusNode: widget.focusNode,
           canRequestFocus: false,
           skipTraversal: true,
           onFocusChange: (f) {
@@ -176,7 +179,7 @@ class _SettingsTileState extends State<SettingsTile> {
             ),
           ),
         ),
-        if (!widget.isLast)
+        if (!widget.isLast && !_isFocused)
           Divider(
             height: 1,
             indent: 56,
