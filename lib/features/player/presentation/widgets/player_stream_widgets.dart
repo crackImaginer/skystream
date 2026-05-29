@@ -378,9 +378,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
 
     return SizedBox(
       height: 58,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Column(
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildTimeHeader(
@@ -408,7 +406,7 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                     alignment: Alignment.center,
                     clipBehavior: Clip.none,
                     children: [
-                      if (bufferWidget != null) bufferWidget,
+                      ?bufferWidget,
                       if (durationMs > 0 && skipSegments.isNotEmpty)
                         ...skipSegments.map((seg) {
                           final leftPercent =
@@ -499,9 +497,14 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
                         ),
                       ),
                       if (isDragging)
-                        Positioned(
-                          left: tooltipLeft,
-                          bottom: 34,
+                        Align(
+                          alignment: Alignment(
+                            // Map tooltipLeft (px from left) to [-1, 1]
+                            (tooltipLeft / constraints.maxWidth * 2 - 1)
+                                .clamp(-1.0, 1.0),
+                            // Place above the track (track is centered at 0)
+                            -3.5,
+                          ),
                           child: IgnorePointer(
                             child: SizedBox(
                               width: tooltipWidth,
@@ -540,7 +543,6 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
               ),
             ),
           ],
-        ),
       ),
     );
   }
@@ -608,13 +610,9 @@ class PlayerPlayPauseButton extends StatelessWidget {
 
   Widget _buildButton({required bool isPlaying, required bool isSpinning}) {
     return CustomButton(
-      // No `autofocus: true` here. The parent (SkyStreamPlayerControlsState)
-      // owns the focus story — on TV it calls `_playFocusNode.requestFocus()`
-      // explicitly from initState / showControls. Setting autofocus here
-      // additionally stole focus on phone + desktop every time the player
-      // opened, even when the user was interacting with something else.
       focusNode: focusNode,
       onPressed: onPressed ?? () => player.playOrPause(),
+      showFocusHighlight: isTv,
       shape: const CircleBorder(),
       child: Container(
         width: size,
@@ -668,23 +666,14 @@ class PlayerBufferingIndicator extends StatelessWidget {
         }
         if (isLoading && !userSkippedOverlay) return const SizedBox.shrink();
 
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: Center(
-              child: Container(
-                width: 80,
-                height: 80,
-                padding: const EdgeInsets.all(8),
-                child: const Center(
-                  child: SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3.5,
-                    ),
-                  ),
-                ),
+        return const IgnorePointer(
+          child: Center(
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 3.5,
               ),
             ),
           ),

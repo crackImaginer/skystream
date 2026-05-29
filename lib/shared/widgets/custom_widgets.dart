@@ -355,15 +355,6 @@ class _CustomButtonState extends State<CustomButton> {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final showHighlight = widget.showFocusHighlight && _isFocused;
 
-    // Wrap in an AnimatedScale + Container so focused buttons get a clear
-    // "elevation" cue regardless of their fill color. Useful on TV where blue
-    // and grey buttons can otherwise look identical to non-focused.
-    final scale = showHighlight ? 1.04 : 1.0;
-    // Reserved for an upcoming focus-glow treatment — keep so the value is
-    // resolved in one spot when the glow ships.
-    // ignore: unused_local_variable
-    final glowColor = primaryColor;
-
     Widget core;
     if (widget.isPrimary) {
       core = FilledButton(
@@ -417,14 +408,9 @@ class _CustomButtonState extends State<CustomButton> {
       );
     }
 
-    // Outer focus ring — accent border + accent glow + scale.
-    // Standardized across CustomButton + PlayerActionButton so play/pause,
-    // seek, top utility, and bottom-action buttons all share the same
-    // focused appearance on TV/keyboard.
-    //
+    // Outer focus ring — accent border + subtle glow.
     // Geometry mirrors the inner button's shape so the ring traces the
-    // button instead of drawing a rounded rectangle around a pill or a
-    // square around a circle (previous bug).
+    // button correctly for circles, pills, and rounded rectangles.
     final shape = widget.shape;
     final BoxShape outerShape;
     final BorderRadius? outerBorderRadius;
@@ -432,9 +418,6 @@ class _CustomButtonState extends State<CustomButton> {
       outerShape = BoxShape.circle;
       outerBorderRadius = null;
     } else if (shape is StadiumBorder) {
-      // Stadium = pill = full-height radius. 999 is overkill but Flutter
-      // clamps it to the half-height at paint time, so it always looks
-      // perfectly pill-shaped regardless of size.
       outerShape = BoxShape.rectangle;
       outerBorderRadius = BorderRadius.circular(999);
     } else if (shape is RoundedRectangleBorder) {
@@ -444,34 +427,27 @@ class _CustomButtonState extends State<CustomButton> {
           ? inner
           : BorderRadius.circular(12);
     } else {
-      // Unknown shape — fall back to the default rounded rectangle.
       outerShape = BoxShape.rectangle;
       outerBorderRadius = BorderRadius.circular(12);
     }
-    return AnimatedScale(
+    return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-      scale: scale,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          shape: outerShape,
-          borderRadius: outerBorderRadius,
-          border: showHighlight
-              ? Border.all(color: primaryColor, width: 2)
-              : null,
-          boxShadow: showHighlight
-              ? [
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.55),
-                    blurRadius: 14,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
-        ),
-        child: core,
+      decoration: BoxDecoration(
+        shape: outerShape,
+        borderRadius: outerBorderRadius,
+        border: showHighlight
+            ? Border.all(color: primaryColor, width: 2)
+            : null,
+        boxShadow: showHighlight
+            ? [
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                ),
+              ]
+            : null,
       ),
+      child: core,
     );
   }
 }

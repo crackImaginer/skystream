@@ -22,6 +22,7 @@ import 'player_stream_widgets.dart';
 import 'player_control_components.dart';
 import 'next_episode_overlay.dart';
 import 'resume_prompt_overlay.dart';
+import 'player_side_panel.dart';
 import 'player_bottom_sheets.dart';
 import 'player_loading_overlay.dart';
 import 'player_osd_overlay.dart';
@@ -531,6 +532,32 @@ class SkyStreamPlayerControlsState
     }
   }
 
+  /// True while the sources side panel owns the screen. Used to suspend the
+  /// chrome and its auto-hide timer so the panel isn't yanked out from under
+  /// the user (req: no auto-hide while the side bar is active).
+  bool get _panelOpen =>
+      ref.read(playerControllerProvider).showSourcesPanel;
+
+  /// Open the sources/audio/subtitles side panel at [tab] (0=Sources, 1=Audio,
+  /// 2=Subtitles): hide the chrome and suspend auto-hide. The panel handles its
+  /// own focus (the active tab's current row).
+  void openSourcesPanel(int tab) {
+    _cancelHideTimer();
+    if (_isVisible) {
+      setState(() => _isVisible = false);
+      widget.onVisibilityChanged?.call(false);
+    }
+    ref.read(playerControllerProvider.notifier).openSourcesPanel(tab: tab);
+  }
+
+  /// Close the panel and bring the chrome back with a fresh auto-hide timer —
+  /// the Back/dismiss path described in the spec.
+  void closeSourcesPanel() {
+    if (!_panelOpen) return;
+    ref.read(playerControllerProvider.notifier).closeSourcesPanel();
+    showControls();
+  }
+
   void _onFocusChange() {
     if (_isVisible && mounted) {
       _startHideTimer();
@@ -540,8 +567,9 @@ class SkyStreamPlayerControlsState
   void _startHideTimer() {
     _hideTimer?.cancel();
     // No point arming the timer if controls are already hidden — the timer's
-    // body would no-op the setState anyway.
-    if (!_isVisible) return;
+    // body would no-op the setState anyway. Also never arm while the side
+    // panel is open: it must stay until the user dismisses it.
+    if (!_isVisible || _panelOpen) return;
     _hideTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _isPlaying) {
         setState(() {
@@ -555,6 +583,7 @@ class SkyStreamPlayerControlsState
 
   void onUserInteraction() {
     if (mounted) {
+      if (_panelOpen) return; // panel owns the screen; don't surface chrome
       if (!_isVisible) {
         setState(() => _isVisible = true);
         widget.onVisibilityChanged?.call(true);
@@ -861,9 +890,14 @@ class SkyStreamPlayerControlsState
     }
 
     return MouseRegion(
-      cursor: _isVisible ? SystemMouseCursors.basic : SystemMouseCursors.none,
+      // Keep the cursor visible while the side panel owns the screen — the
+      // chrome is hidden then, but the panel still needs a pointer.
+      cursor: (_isVisible || _panelOpen)
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.none,
       onEnter: (_) {
         // Always show cursor when mouse enters the player area
+        if (_panelOpen) return; // panel owns the screen
         if (!_isVisible) {
           setState(() => _isVisible = true);
           widget.onVisibilityChanged?.call(true);
@@ -871,6 +905,7 @@ class SkyStreamPlayerControlsState
         _startHideTimer();
       },
       onHover: (_) {
+        if (_panelOpen) return; // panel owns the screen
         if (!_isVisible && mounted) {
           setState(() => _isVisible = true);
           widget.onVisibilityChanged?.call(true);
@@ -1057,6 +1092,26 @@ class SkyStreamPlayerControlsState
                         .read(playerControllerProvider.notifier)
                         .toggleEpisodeList(),
                   ),
+
+                // Sources / Audio / Subtitles left drawer — topmost so it sits
+                // above the chrome. Pure Row layout inside (no nested Stack).
+                Positioned.fill(
+                  child: PlayerSidePanel(
+                    isVisible: ref.watch(
+                      playerControllerProvider.select(
+                        (s) => s.showSourcesPanel,
+                      ),
+                    ),
+                    isTv: _isTv,
+                    onDismiss: closeSourcesPanel,
+                    child: PlayerSourcesPanel(
+                      player: widget.player,
+                      videoViewController: widget.videoViewController,
+                      isTv: _isTv,
+                      onClose: closeSourcesPanel,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1145,67 +1200,55 @@ class SkyStreamPlayerControlsState
       onPressed: _togglePlay,
     );
 
+    // Left cluster: play/pause (non-touch), lock (touch only), next episode
     final leading = <Widget>[
-      if (!isTouch) ...[
-        if (canSeek) ...[
-          PlayerSeekButton(
-            icon: Icons.replay_10_rounded,
-            size: 28,
-            isTv: _isTv,
-            onPressed: seekBack,
-          ),
-          const SizedBox(width: 4),
-        ],
-        playPause,
-        if (canSeek) ...[
-          const SizedBox(width: 4),
-          PlayerSeekButton(
-            icon: Icons.forward_10_rounded,
-            size: 28,
-            isTv: _isTv,
-            onPressed: seekForward,
-          ),
-        ],
-      ],
-    ];
-
-    final actions = <Widget>[
+      if (!isTouch) playPause,
       if (isTouch)
-        _buildActionButton(
+        PlayerIconButton(
           icon: _isLocked ? Icons.lock : Icons.lock_open,
-          label: _isLocked ? l10n.unlock : l10n.lock,
-          onTap: _toggleLock,
+          tooltip: _isLocked ? l10n.unlock : l10n.lock,
+          onPressed: _toggleLock,
+          isTv: _isTv,
           highlight: _isLocked,
         ),
-      _buildActionButton(
+      if (isSeries)
+        PlayerIconButton(
+          icon: Icons.skip_next_rounded,
+          tooltip: l10n.next,
+          onPressed: () =>
+              ref.read(playerControllerProvider.notifier).playNextEpisode(),
+          isTv: _isTv,
+        ),
+    ];
+
+    // Right-side icon-only buttons (same style as resize/fullscreen). Sources,
+    // Audio and Subtitles all open the same side panel, each landing on its own
+    // tab; the panel applies every choice instantly.
+    final actions = <Widget>[
+      PlayerIconButton(
         icon: Icons.source,
-        label: l10n.sources,
-        onTap: () => PlayerBottomSheets.showSourceSelection(
-          context: context,
-          ref: ref,
-          streams: streams,
-          currentStream: currentStream,
-          onStreamSelected: (s) => ref
-              .read(playerControllerProvider.notifier)
-              .changeStream(s, manualSelection: true),
-        ),
+        tooltip: l10n.sources,
+        onPressed: () => openSourcesPanel(0),
+        isTv: _isTv,
       ),
-      _buildActionButton(
-        icon: Icons.subtitles,
-        label: l10n.tracks,
-        onTap: () => PlayerBottomSheets.showTracksSelection(
-          context: context,
-          ref: ref,
-          streams: streams,
-          currentStream: currentStream,
-        ),
+      PlayerIconButton(
+        icon: Icons.audiotrack_rounded,
+        tooltip: l10n.audioTracks,
+        onPressed: () => openSourcesPanel(1),
+        isTv: _isTv,
+      ),
+      PlayerIconButton(
+        icon: Icons.subtitles_rounded,
+        tooltip: l10n.subtitles,
+        onPressed: () => openSourcesPanel(2),
+        isTv: _isTv,
       ),
       if (supportsPlaybackSpeed)
-        _buildActionButton(
+        PlayerIconButton(
           icon: Icons.speed,
-          label:
+          tooltip:
               "${playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}x",
-          onTap: () => PlayerBottomSheets.showSpeedSelection(
+          onPressed: () => PlayerBottomSheets.showSpeedSelection(
             context: context,
             currentSpeed: playbackSpeed,
             maxSpeed: maxPlaybackSpeed,
@@ -1213,38 +1256,35 @@ class SkyStreamPlayerControlsState
                 .read(playerControllerProvider.notifier)
                 .setPlaybackSpeed(s, persist: true),
           ),
+          isTv: _isTv,
         ),
       if (torrentStatus != null)
-        _buildActionButton(
+        PlayerIconButton(
           icon: Icons.folder,
-          label: l10n.content,
-          onTap: () => PlayerBottomSheets.showContentSelection(
+          tooltip: l10n.content,
+          onPressed: () => PlayerBottomSheets.showContentSelection(
             context: context,
             torrentStatus: torrentStatus,
             onTorrentFileSelected: (idx) => ref
                 .read(playerControllerProvider.notifier)
                 .onTorrentFileSelected(idx),
           ),
+          isTv: _isTv,
         ),
       if (torrentStatus != null)
-        _buildActionButton(
+        PlayerIconButton(
           icon: Icons.info_outline,
-          label: l10n.stats,
-          onTap: () => setState(() => _showTorrentInfo = !_showTorrentInfo),
+          tooltip: l10n.stats,
+          onPressed: () => setState(() => _showTorrentInfo = !_showTorrentInfo),
+          isTv: _isTv,
           highlight: _showTorrentInfo,
         ),
-      if (isSeries)
-        _buildActionButton(
-          icon: Icons.skip_next,
-          label: l10n.next,
-          onTap: () =>
-              ref.read(playerControllerProvider.notifier).playNextEpisode(),
-        ),
       if (isTouch && (Platform.isAndroid || (Platform.isIOS && !_isIpad)))
-        _buildActionButton(
+        PlayerIconButton(
           icon: Icons.screen_rotation,
-          label: l10n.rotate,
-          onTap: _toggleOrientation,
+          tooltip: l10n.rotate,
+          onPressed: _toggleOrientation,
+          isTv: _isTv,
         ),
     ];
 
@@ -1286,15 +1326,17 @@ class SkyStreamPlayerControlsState
     // Positioned, no magic offsets — each zone sizes to content and paints its
     // own scrim. ExcludeFocus + IgnorePointer gate interaction while hidden;
     // ReadingOrderTraversalPolicy gives geometric D-pad navigation so focus
-    // can always reach a neighbouring control.
+    // can always reach a neighbouring control. The chrome is also fully gated
+    // off while the sources side panel owns the screen.
+    final chromeVisible = _isVisible && !_panelOpen;
     return FocusTraversalGroup(
       policy: ReadingOrderTraversalPolicy(),
       child: ExcludeFocus(
-        excluding: !_isVisible,
+        excluding: !chromeVisible,
         child: IgnorePointer(
-          ignoring: !_isVisible,
+          ignoring: !chromeVisible,
           child: AnimatedOpacity(
-            opacity: _isVisible ? 1.0 : 0.0,
+            opacity: chromeVisible ? 1.0 : 0.0,
             duration: _animDuration,
             child: Column(
               children: [

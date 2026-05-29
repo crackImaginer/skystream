@@ -173,6 +173,13 @@ class PlayerState {
   final String? nextEpisodeTitle;
   final bool isAdaptiveBufferingActive;
   final bool showEpisodeList;
+
+  /// Whether the sources/audio/subtitles side panel is open. While open, the
+  /// player chrome is hidden and auto-hide is suspended.
+  final bool showSourcesPanel;
+
+  /// Which tab the side panel should show: 0 = Sources, 1 = Audio, 2 = Subtitles.
+  final int sourcesPanelTab;
   final double playbackSpeed;
   final bool isLive;
   final double subtitleDelay;
@@ -207,6 +214,8 @@ class PlayerState {
     this.nextEpisodeTitle,
     this.isAdaptiveBufferingActive = false,
     this.showEpisodeList = false,
+    this.showSourcesPanel = false,
+    this.sourcesPanelTab = 0,
     this.playbackSpeed = 1.0,
     this.isLive = false,
     this.isSeekable = false,
@@ -261,6 +270,8 @@ class PlayerState {
     String? nextEpisodeTitle,
     bool? isAdaptiveBufferingActive,
     bool? showEpisodeList,
+    bool? showSourcesPanel,
+    int? sourcesPanelTab,
     double? playbackSpeed,
     bool? isLive,
     bool? isSeekable,
@@ -295,6 +306,8 @@ class PlayerState {
       isAdaptiveBufferingActive:
           isAdaptiveBufferingActive ?? this.isAdaptiveBufferingActive,
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
+      showSourcesPanel: showSourcesPanel ?? this.showSourcesPanel,
+      sourcesPanelTab: sourcesPanelTab ?? this.sourcesPanelTab,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       isLive: isLive ?? this.isLive,
       isSeekable: isSeekable ?? this.isSeekable,
@@ -3193,6 +3206,15 @@ class PlayerController extends Notifier<PlayerState> {
 
   void toggleEpisodeList() {
     state = state.copyWith(showEpisodeList: !state.showEpisodeList);
+  }
+
+  void openSourcesPanel({int tab = 0}) {
+    state = state.copyWith(showSourcesPanel: true, sourcesPanelTab: tab);
+  }
+
+  void closeSourcesPanel() {
+    if (!state.showSourcesPanel) return;
+    state = state.copyWith(showSourcesPanel: false);
   }
 
   Future<void> loadEpisode(Episode episode) async {

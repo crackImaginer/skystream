@@ -521,6 +521,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           canPop: false,
           onPopInvokedWithResult: (didPop, result) async {
             if (didPop) return;
+            // Sources side panel open → Back closes it and restores the chrome
+            // (with a fresh auto-hide timer), on every platform. This must come
+            // first so Back never exits the player while the panel is up.
+            if (ref.read(
+              playerControllerProvider.select((s) => s.showSourcesPanel),
+            )) {
+              _controlsKeyFinal.currentState?.closeSourcesPanel();
+              return;
+            }
             // On TV: intercept back to hide controls first (if controls are
             // visible and video is playing), so the user doesn't exit by accident.
             // On phone/tablet: always pop directly — no two-step back.

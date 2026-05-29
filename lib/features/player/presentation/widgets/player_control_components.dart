@@ -122,16 +122,26 @@ class PlayerBottomBar extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
+                  // Fixed left group: play/pause, lock, next
                   ...leading,
-                  if (leading.isNotEmpty) const SizedBox(width: 8),
+                  // Right group: all action + utility buttons, scrollable
                   Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(children: actions),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ...actions,
+                            if (actions.isNotEmpty && trailing.isNotEmpty)
+                              const SizedBox(width: 4),
+                            ...trailing,
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  if (trailing.isNotEmpty) const SizedBox(width: 8),
-                  ...trailing,
                 ],
               ),
             ],
@@ -171,37 +181,14 @@ class PlayerCenterControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (canSeek) ...[
-            PlayerSeekButton(
-              icon: Icons.replay_10_rounded,
-              size: 44,
-              isTv: isTv,
-              onPressed: onSeekBackward,
-            ),
-            const SizedBox(width: 56),
-          ],
-          PlayerPlayPauseButton(
-            player: player,
-            videoViewController: videoViewController,
-            isLoading: isLoading,
-            isTv: isTv,
-            size: 82,
-            focusNode: playFocusNode,
-            onPressed: onPlayPause,
-          ),
-          if (canSeek) ...[
-            const SizedBox(width: 56),
-            PlayerSeekButton(
-              icon: Icons.forward_10_rounded,
-              size: 44,
-              isTv: isTv,
-              onPressed: onSeekForward,
-            ),
-          ],
-        ],
+      child: PlayerPlayPauseButton(
+        player: player,
+        videoViewController: videoViewController,
+        isLoading: isLoading,
+        isTv: isTv,
+        size: 82,
+        focusNode: playFocusNode,
+        onPressed: onPlayPause,
       ),
     );
   }
@@ -352,65 +339,60 @@ class _PlayerActionButtonState extends State<PlayerActionButton> {
             _hovered = false;
             _pressed = false;
           }),
-          child: AnimatedScale(
-            scale: showTvFocusRing ? HotstarPlayerStyle.focusScale : 1.0,
-            duration: HotstarPlayerStyle.fastMotionDuration,
-            child: Material(
-              color: Colors.transparent,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: widget.onTap,
+              onHighlightChanged: _setPressed,
               borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: widget.onTap,
-                onHighlightChanged: _setPressed,
-                borderRadius: BorderRadius.circular(8),
-                hoverColor: Colors.transparent,
-                focusColor: Colors.transparent,
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                child: AnimatedContainer(
-                  duration: HotstarPlayerStyle.fastMotionDuration,
-                  constraints: const BoxConstraints(minHeight: 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? primaryColor.withValues(alpha: 0.16)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: showTvFocusRing
-                        ? Border.all(color: primaryColor, width: 2)
-                        : null,
-                    boxShadow: showTvFocusRing
-                        ? [
-                            BoxShadow(
-                              color: primaryColor.withValues(alpha: 0.55),
-                              blurRadius: 14,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        widget.icon,
-                        color: isActive ? primaryColor : Colors.white,
-                        size: 20,
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: AnimatedContainer(
+                duration: HotstarPlayerStyle.fastMotionDuration,
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? primaryColor.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: showTvFocusRing
+                      ? Border.all(color: primaryColor, width: 2)
+                      : null,
+                  boxShadow: showTvFocusRing
+                      ? [
+                          BoxShadow(
+                            color: primaryColor.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      widget.icon,
+                      color: isActive ? primaryColor : Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: isActive
+                            ? primaryColor
+                            : HotstarPlayerStyle.primaryText,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        widget.label,
-                        style: TextStyle(
-                          color: isActive
-                              ? primaryColor
-                              : HotstarPlayerStyle.primaryText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),

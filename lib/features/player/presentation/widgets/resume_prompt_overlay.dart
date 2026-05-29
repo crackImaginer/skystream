@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-// Pulled in for LogicalKeyboardKey / KeyDownEvent in the Focus key handler;
-// `material.dart` does not re-export these (despite an earlier IDE hint).
 import 'package:flutter/services.dart';
 import 'package:skystream/l10n/generated/app_localizations.dart';
 import 'hotstar_player_style.dart';
@@ -39,11 +37,11 @@ class ResumePromptOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    String subtitle = "";
+    String subtitle = '';
     if (positionMs != null && positionMs! > 0) {
       subtitle = l10n.pausedAt(_formatDuration(positionMs!));
     } else if (percentage != null && percentage! > 0) {
-      subtitle = "Synced progress: ${percentage!.toStringAsFixed(0)}%";
+      subtitle = 'Synced progress: ${percentage!.toStringAsFixed(0)}%';
     }
     return PlayerPromptPlacement(
       isTv: isTv,
@@ -91,9 +89,9 @@ class CountdownFillButton extends StatefulWidget {
 class _CountdownFillButtonState extends State<CountdownFillButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  late final FocusNode _focusNode;
   Timer? _timer;
   bool _completed = false;
-  late final FocusNode _focusNode;
 
   @override
   void initState() {
@@ -108,9 +106,7 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
-    if (widget.focusNode == null) {
-      _focusNode.dispose();
-    }
+    if (widget.focusNode == null) _focusNode.dispose();
     super.dispose();
   }
 
@@ -139,10 +135,11 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
     final buttonWidth = isCompact ? 190.0 : 260.0;
-    final buttonHeight = widget.subtitle == null
+    final buttonHeight = widget.subtitle == null || widget.subtitle!.isEmpty
         ? (isCompact ? 46.0 : 52.0)
         : (isCompact ? 58.0 : 64.0);
-    final borderRadius = BorderRadius.circular(isCompact ? 8 : 10);
+    final radius = isCompact ? 8.0 : 10.0;
+    final borderRadius = BorderRadius.circular(radius);
 
     return FocusTraversalGroup(
       child: Focus(
@@ -159,13 +156,7 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
           }
           if (key == LogicalKeyboardKey.escape ||
               key == LogicalKeyboardKey.goBack) {
-            if (widget.onDismiss != null) {
-              _handleDismiss();
-            } else {
-              // No explicit dismiss — fire the timeout path early so the
-              // overlay tears itself down instead of trapping focus.
-              _handleTimeout();
-            }
+            widget.onDismiss != null ? _handleDismiss() : _handleTimeout();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
@@ -173,64 +164,65 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
         child: Builder(
           builder: (context) {
             final isFocused = Focus.of(context).hasFocus;
-            return AnimatedScale(
-              scale: isFocused && widget.isTv ? 1.04 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              child: SizedBox(
-                width: buttonWidth,
-                height: buttonHeight,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: DecoratedBox(
+
+            // Layout: DecoratedBox (border + shadow) → ClipRRect → Material
+            // (ink) → Row [ icon | labels | dismiss? ]
+            //
+            // The countdown fill is painted as a custom background on the
+            // Material using AnimatedBuilder, so there is NO Stack at all —
+            // just a single layered widget tree.
+            return SizedBox(
+              width: buttonWidth,
+              height: buttonHeight,
+              child: AnimatedContainer(
+                duration: HotstarPlayerStyle.fastMotionDuration,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.52),
+                  borderRadius: borderRadius,
+                  border: Border.all(
+                    color: isFocused && widget.isTv
+                        ? HotstarPlayerStyle.accent
+                        : Colors.white.withValues(alpha: 0.22),
+                    width: isFocused && widget.isTv ? 2 : 1,
+                  ),
+                  boxShadow: isFocused && widget.isTv
+                      ? [
+                          BoxShadow(
+                            color: HotstarPlayerStyle.accent
+                                .withValues(alpha: 0.2),
+                            blurRadius: 8,
+                          ),
+                        ]
+                      : null,
+                ),
+                  child: ClipRRect(
+                    borderRadius: borderRadius,
+                    // AnimatedBuilder drives the fill width; the content Row
+                    // sits on top via foregroundDecoration on a second
+                    // DecoratedBox so there is still no Stack.
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, child) => DecoratedBox(
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.52),
-                          borderRadius: borderRadius,
-                          boxShadow: isFocused && widget.isTv
-                              ? [
-                                  BoxShadow(
-                                    color: HotstarPlayerStyle.accent.withValues(
-                                      alpha: 0.55,
-                                    ),
-                                    blurRadius: 16,
-                                    spreadRadius: 1,
-                                  ),
-                                ]
-                              : null,
-                          border: Border.all(
-                            color: isFocused && widget.isTv
-                                ? HotstarPlayerStyle.accent
-                                : Colors.white.withValues(alpha: 0.22),
-                            width: isFocused && widget.isTv ? 2 : 1,
+                          gradient: LinearGradient(
+                            colors: [
+                              HotstarPlayerStyle.accent
+                                  .withValues(alpha: 0.92),
+                              HotstarPlayerStyle.accent
+                                  .withValues(alpha: 0.92),
+                              Colors.transparent,
+                              Colors.transparent,
+                            ],
+                            stops: [
+                              0,
+                              _controller.value,
+                              _controller.value,
+                              1,
+                            ],
                           ),
                         ),
+                        child: child,
                       ),
-                    ),
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: borderRadius,
-                        child: AnimatedBuilder(
-                          animation: _controller,
-                          builder: (context, child) {
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: FractionallySizedBox(
-                                widthFactor: _controller.value,
-                                heightFactor: 1,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: ColoredBox(
-                            color: HotstarPlayerStyle.accent.withValues(
-                              alpha: 0.92,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned.fill(
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -265,16 +257,16 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
                                           fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if (widget.subtitle != null) ...[
+                                      if (widget.subtitle != null &&
+                                          widget.subtitle!.isNotEmpty) ...[
                                         const SizedBox(height: 2),
                                         Text(
                                           widget.subtitle!,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.78,
-                                            ),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.78),
                                             fontSize: isCompact ? 10 : 11,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -305,9 +297,8 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
             );
           },
         ),

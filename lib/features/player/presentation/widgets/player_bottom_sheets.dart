@@ -722,6 +722,18 @@ class PlayerBottomSheets {
     );
   }
 
+  /// Public entry point for the subtitle-options dialog (sync / styles /
+  /// search / load external). Retained for callers that still want the legacy
+  /// dialog; the sources side panel now inlines these controls instead.
+  static void showSubtitleOptions(BuildContext context) =>
+      _showSubtitleOptions(context);
+
+  /// Public entry point for the online subtitle search dialog. The sources
+  /// side panel's "Search online" row opens this directly (pending its own
+  /// redesign).
+  static void showSubtitleSearch(BuildContext context) =>
+      _showSubtitleSearch(context);
+
   static void _showSubtitleOptions(BuildContext context) {
     final parentContext = context;
     showDialog<void>(
