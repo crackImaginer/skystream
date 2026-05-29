@@ -82,15 +82,22 @@ class PlayerTopBar extends StatelessWidget {
   }
 }
 
-/// Bottom zone shell: scrubber row on top, then a single controls row laid out
-/// as [leading] (playback buttons) · scrollable [actions] · [trailing]
-/// (utilities). Paints its own bottom scrim. Pure layout — the orchestrator
-/// supplies the content so this widget never needs a long callback list.
+/// Bottom zone shell: scrubber row on top, then a single flat controls row —
+/// [leading] (playback) pinned left, a [Spacer], then [actions] (everything
+/// else) on the right. All buttons are direct siblings of one [Row].
+///
+/// On TV, Left/Right are driven explicitly by reading-order focus traversal
+/// ([FocusNode.nextFocus]/[previousFocus]) within the row's own
+/// [FocusTraversalGroup]. Geometric directional traversal proved unreliable at
+/// crossing the wide flexible [Spacer] between the left and right groups, so
+/// focus could get stranded on one side. Up/Down still bubble out to move
+/// between the scrubber / controls / top-bar rows. (Off TV the handler is null,
+/// so desktop keyboard arrows keep their seek/volume behaviour.) Paints its own
+/// bottom scrim.
 class PlayerBottomBar extends StatelessWidget {
   final Widget progressBar;
   final List<Widget> leading;
   final List<Widget> actions;
-  final List<Widget> trailing;
   final bool isTv;
 
   const PlayerBottomBar({
@@ -98,9 +105,24 @@ class PlayerBottomBar extends StatelessWidget {
     required this.progressBar,
     this.leading = const [],
     this.actions = const [],
-    this.trailing = const [],
     this.isTv = false,
   });
+
+  KeyEventResult _handleRowKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final primary = FocusManager.instance.primaryFocus;
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      primary?.nextFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      primary?.previousFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,29 +142,21 @@ class PlayerBottomBar extends StatelessWidget {
             children: [
               progressBar,
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  // Fixed left group: play/pause, lock, next
-                  ...leading,
-                  // Right group: all action + utility buttons, scrollable
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ...actions,
-                            if (actions.isNotEmpty && trailing.isNotEmpty)
-                              const SizedBox(width: 4),
-                            ...trailing,
-                          ],
-                        ),
-                      ),
-                    ),
+              FocusTraversalGroup(
+                child: Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onKeyEvent: isTv ? _handleRowKey : null,
+                  child: Row(
+                    children: [
+                      // Left group: play/pause, lock, next.
+                      ...leading,
+                      const Spacer(),
+                      // Right group: actions + utilities.
+                      ...actions,
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),

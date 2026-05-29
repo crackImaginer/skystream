@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
 import 'package:skystream/l10n/generated/app_localizations.dart';
+import '../../../../core/domain/entity/multimedia_item.dart';
+import '../../../../core/storage/history_repository.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../player_controller.dart';
 import 'hotstar_player_style.dart';
@@ -42,8 +45,8 @@ class PlayerSidePanel extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
     final panelWidth = isCompact
-        ? (size.width * 0.86).clamp(280.0, 460.0)
-        : 420.0;
+        ? (size.width * 0.8).clamp(260.0, 380.0)
+        : 350.0;
 
     return IgnorePointer(
       ignoring: !isVisible,
@@ -149,6 +152,11 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
   // target.
   final FocusNode _anchorNode = FocusNode(debugLabel: 'sources_panel_anchor');
 
+  // True while focus is on the header (tabs/close). There, Left/Right move
+  // between tab headers (default focus traversal); in the body they trigger the
+  // quick tab-switch QoL instead.
+  bool _headerFocused = false;
+
   // Optimistic local selection so the checkmark moves the instant a row is
   // tapped, before the engine's track stream ticks back with the real state.
   String? _audioId;
@@ -161,10 +169,10 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
     _tabController = TabController(
       length: 3,
       vsync: this,
-      initialIndex: ref.read(playerControllerProvider).sourcesPanelTab.clamp(
-        0,
-        2,
-      ),
+      initialIndex: ref
+          .read(playerControllerProvider)
+          .sourcesPanelTab
+          .clamp(0, 2),
     );
     _tabController.addListener(_onTabChanged);
     _syncFromSnapshot();
@@ -194,15 +202,24 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
         : snapshot.subtitleTracks.firstWhereOrNull((t) => t.selected)?.id;
   }
 
-  /// Focus the active tab's anchor row; if that tab has no focusable row (e.g.
-  /// empty audio list), fall back to the root so the remote isn't stranded.
+  /// Focus the active tab's anchor row (the current selection, or the first
+  /// row) and scroll it to the centre so it's never left off-screen after a tab
+  /// switch. Falls back to the root if the tab has no focusable row (e.g. an
+  /// empty audio list) so the remote isn't stranded.
   void _focusActiveTab() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !ref.read(playerControllerProvider).showSourcesPanel) {
         return;
       }
-      if (_anchorNode.context != null) {
+      final ctx = _anchorNode.context;
+      if (ctx != null) {
         _anchorNode.requestFocus();
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
       } else {
         _rootNode.requestFocus();
       }
@@ -223,24 +240,27 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
-      widget.onClose();
-      return KeyEventResult.handled;
-    }
-    // Left/Right switch tabs (and are consumed at the edges so focus can't
-    // escape the panel sideways). Up/Down fall through to directional traversal
-    // within the active tab's list.
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      if (_tabController.index > 0) {
-        _tabController.animateTo(_tabController.index - 1);
+    // Back/escape is intentionally NOT handled here. It bubbles to the player's
+    // root key handler, which closes the panel through a single guarded path —
+    // so the duplicate Back delivery on some TVs (KeyEvent + route-pop) can't
+    // double-act and walk past the panel into exiting the player.
+    // Left/Right quick-switch tabs from the BODY (QoL). When focus is on the
+    // header we let them through so directional traversal moves between the tab
+    // headers and the close button as normal. Up/Down always fall through to
+    // traversal within the active tab's list.
+    if (!_headerFocused) {
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        if (_tabController.index > 0) {
+          _tabController.animateTo(_tabController.index - 1);
+        }
+        return KeyEventResult.handled;
       }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight) {
-      if (_tabController.index < _tabController.length - 1) {
-        _tabController.animateTo(_tabController.index + 1);
+      if (key == LogicalKeyboardKey.arrowRight) {
+        if (_tabController.index < _tabController.length - 1) {
+          _tabController.animateTo(_tabController.index + 1);
+        }
+        return KeyEventResult.handled;
       }
-      return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
@@ -249,27 +269,27 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
   Widget build(BuildContext context) {
     // When the panel opens, jump to the requested tab, refresh selection, and
     // hand focus to the active tab.
-    ref.listen(
-      playerControllerProvider.select((s) => s.showSourcesPanel),
-      (prev, next) {
-        if (next == true && prev != true && mounted) {
-          final tab = ref.read(playerControllerProvider).sourcesPanelTab.clamp(
-            0,
-            2,
-          );
-          if (_tabController.index != tab) _tabController.index = tab;
-          setState(_syncFromSnapshot);
-          _focusActiveTab();
-        }
-      },
-    );
+    ref.listen(playerControllerProvider.select((s) => s.showSourcesPanel), (
+      prev,
+      next,
+    ) {
+      if (next == true && prev != true && mounted) {
+        final tab = ref
+            .read(playerControllerProvider)
+            .sourcesPanelTab
+            .clamp(0, 2);
+        if (_tabController.index != tab) _tabController.index = tab;
+        setState(_syncFromSnapshot);
+        _focusActiveTab();
+      }
+    });
     // A source change loads its own track set — old ids no longer apply.
-    ref.listen(
-      playerControllerProvider.select((s) => s.currentStreamIndex),
-      (prev, next) {
-        if (prev != next && mounted) setState(_syncFromSnapshot);
-      },
-    );
+    ref.listen(playerControllerProvider.select((s) => s.currentStreamIndex), (
+      prev,
+      next,
+    ) {
+      if (prev != next && mounted) setState(_syncFromSnapshot);
+    });
 
     final l10n = AppLocalizations.of(context)!;
 
@@ -280,30 +300,38 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header: tabs + close. Excluded from focus so D-pad stays in the
-            // body (tabs are driven by Left/Right; Back closes). Touch/mouse can
-            // still tap a tab or the close button.
-            ExcludeFocus(
+            // Header: tabs + close. Fully focusable (default behaviour) — D-pad
+            // Up from the body reaches the tabs/close, OK activates them. The
+            // wrapper tracks header focus so Left/Right move *between* tab
+            // headers there, while in the body Left/Right keep the quick
+            // tab-switch QoL. Non-scrollable so 3 tabs fit without a horizontal
+            // Scrollable that would trap directional focus.
+            Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              onFocusChange: (v) => _headerFocused = v,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 4, 0),
+                padding: const EdgeInsets.fromLTRB(0, 4, 4, 0),
                 child: Row(
                   children: [
                     Expanded(
                       child: TabBar(
                         controller: _tabController,
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
+                        isScrollable: false,
+                        // Tight label padding so "Audio Tracks" fits the three
+                        // equal-width tabs without clipping.
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 2),
                         indicatorColor: HotstarPlayerStyle.accent,
                         indicatorWeight: 2.5,
                         dividerColor: Colors.transparent,
                         labelColor: HotstarPlayerStyle.primaryText,
                         unselectedLabelColor: HotstarPlayerStyle.mutedText,
                         labelStyle: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
                         unselectedLabelStyle: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
                         tabs: [
@@ -318,6 +346,13 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
                       tooltip: MaterialLocalizations.of(
                         context,
                       ).closeButtonTooltip,
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(
+                        minWidth: 38,
+                        minHeight: 38,
+                      ),
+                      padding: EdgeInsets.zero,
+                      iconSize: 22,
                       icon: const Icon(Icons.close_rounded),
                       color: HotstarPlayerStyle.secondaryText,
                     ),
@@ -334,13 +369,24 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
   }
 
   Widget _buildActiveTab(AppLocalizations l10n) {
+    // Distinct keys per tab so switching gives each a fresh ListView (starting
+    // at the top) instead of inheriting the previous tab's scroll offset.
     switch (_tabController.index) {
       case 1:
-        return _buildTrackTab(l10n, isAudio: true);
+        return KeyedSubtree(
+          key: const ValueKey('panel_tab_audio'),
+          child: _buildTrackTab(l10n, isAudio: true),
+        );
       case 2:
-        return _buildTrackTab(l10n, isAudio: false);
+        return KeyedSubtree(
+          key: const ValueKey('panel_tab_subtitles'),
+          child: _buildTrackTab(l10n, isAudio: false),
+        );
       default:
-        return _buildSourcesTab(l10n);
+        return KeyedSubtree(
+          key: const ValueKey('panel_tab_sources'),
+          child: _buildSourcesTab(l10n),
+        );
     }
   }
 
@@ -388,9 +434,8 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
     if (useExoPlayer && widget.videoViewController != null) {
       return ListenableBuilder(
         listenable: widget.videoViewController!.mediaInfo,
-        builder: (context, _) => isAudio
-            ? _buildAudioBody(l10n)
-            : _buildSubtitleBody(l10n),
+        builder: (context, _) =>
+            isAudio ? _buildAudioBody(l10n) : _buildSubtitleBody(l10n),
       );
     }
     return StreamBuilder<Tracks>(
@@ -427,14 +472,60 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
     );
   }
 
+  // Palettes mirrored from the legacy subtitle-style dialog.
+  static const List<int> _textColors = [
+    0xFFFFFFFF,
+    0xFFFFFF00,
+    0xFF00FFFF,
+    0xFFFF00FF,
+    0xFF00FF00,
+    0xFFFF0000,
+    0xFF2196F3,
+    0xFFFF9800,
+  ];
+  static const List<int> _bgColors = [
+    0x00000000,
+    0xFF000000,
+    0xFF333333,
+    0xFF1A1A1A,
+    0xFF001F3F,
+  ];
+
   Widget _buildSubtitleBody(AppLocalizations l10n) {
-    final tracks = ref
-        .read(playerControllerProvider.notifier)
-        .getTrackSelectionSnapshot()
-        .subtitleTracks;
+    final controller = ref.read(playerControllerProvider.notifier);
+    final settingsNotifier = ref.read(playerSettingsProvider.notifier);
+
+    final supportsExternal = ref.watch(
+      playerControllerProvider.select((s) => s.supportsExternalSubtitleLoading),
+    );
+    final supportsDelay = ref.watch(
+      playerControllerProvider.select((s) => s.supportsSubtitleDelay),
+    );
+    final supportsStyling = ref.watch(
+      playerControllerProvider.select((s) => s.supportsSubtitleStyling),
+    );
+    final delay = ref.watch(
+      playerControllerProvider.select((s) => s.subtitleDelay),
+    );
+    final settings =
+        ref.watch(playerSettingsProvider).asData?.value ??
+        const PlayerSettings();
+
+    final tracks = controller.getTrackSelectionSnapshot().subtitleTracks;
+
+    void applyStyle({double? size, int? color, int? bg, double? opacity}) {
+      settingsNotifier.setSubtitleSettings(
+        size ?? settings.subtitleSize,
+        color ?? settings.subtitleColor,
+        bg ?? settings.subtitleBackgroundColor,
+        opacity ?? settings.subtitleBackgroundOpacity,
+      );
+      controller.applySubtitleSettings();
+    }
 
     final rows = <Widget>[
-      // "Off" is always present and is the anchor when subtitles are disabled.
+      // Track selection (Off + available tracks) first. Anchor stays on the
+      // active choice so the panel opens focused on it.
       _PanelOptionRow(
         label: l10n.off,
         selected: _subtitlesOff,
@@ -445,7 +536,7 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
             _subtitlesOff = true;
             _subtitleId = null;
           });
-          ref.read(playerControllerProvider.notifier).selectSubtitleTrack(null);
+          controller.selectSubtitleTrack(null);
         },
       ),
       ...tracks.map((track) {
@@ -461,23 +552,464 @@ class _PlayerSourcesPanelState extends ConsumerState<PlayerSourcesPanel>
               _subtitlesOff = false;
               _subtitleId = track.id;
             });
-            ref
-                .read(playerControllerProvider.notifier)
-                .selectSubtitleTrack(track.id);
+            controller.selectSubtitleTrack(track.id);
           },
         );
       }),
-      // Advanced subtitle tooling (sync / styles / search / load external).
+
+      // Add-subtitle actions, after the list (gated on engine support).
       _PanelOptionRow(
-        label: l10n.options,
-        leadingIcon: Icons.settings_outlined,
+        label: l10n.loadFromDevice,
+        leadingIcon: Icons.file_open_outlined,
         selected: false,
         isTv: widget.isTv,
-        onTap: () => PlayerBottomSheets.showSubtitleOptions(context),
+        enabled: supportsExternal,
+        onTap: () => controller.loadExternalSubtitleFile(),
       ),
+      _PanelOptionRow(
+        label: l10n.searchOnline,
+        leadingIcon: Icons.search_rounded,
+        selected: false,
+        isTv: widget.isTv,
+        enabled: supportsExternal,
+        onTap: () => PlayerBottomSheets.showSubtitleSearch(context),
+      ),
+
+      // Sync (timing) — inline stepper, no submenu. Left/Right nudge ±0.1s.
+      if (supportsDelay) ...[
+        _PanelSubheader(title: l10n.subtitleSync),
+        _SubtitleAdjusterRow(
+          label: l10n.syncDelay,
+          valueText: '${delay.toStringAsFixed(1)}s',
+          isTv: widget.isTv,
+          onDecrease: () => controller.setSubtitleDelay(
+            double.parse((delay - 0.1).toStringAsFixed(1)),
+          ),
+          onIncrease: () => controller.setSubtitleDelay(
+            double.parse((delay + 0.1).toStringAsFixed(1)),
+          ),
+        ),
+      ],
+
+      // Style — every control inlined as a Left/Right adjuster, no submenu.
+      if (supportsStyling) ...[
+        _PanelSubheader(title: l10n.styleSettings),
+        _SubtitleAdjusterRow(
+          label: l10n.fontSize,
+          valueText: settings.subtitleSize.round().toString(),
+          isTv: widget.isTv,
+          onDecrease: () =>
+              applyStyle(size: (settings.subtitleSize - 2).clamp(10, 60)),
+          onIncrease: () =>
+              applyStyle(size: (settings.subtitleSize + 2).clamp(10, 60)),
+        ),
+        _SubtitleAdjusterRow(
+          label: l10n.verticalPosition,
+          valueText: '${settings.subtitlePosition.round()}%',
+          isTv: widget.isTv,
+          // Vertical control → up/down chevrons instead of −/+.
+          decreaseIcon: Icons.keyboard_arrow_down_rounded,
+          increaseIcon: Icons.keyboard_arrow_up_rounded,
+          onDecrease: () {
+            settingsNotifier.setSubtitlePosition(
+              (settings.subtitlePosition - 2).clamp(50, 100),
+            );
+            controller.applySubtitleSettings();
+          },
+          onIncrease: () {
+            settingsNotifier.setSubtitlePosition(
+              (settings.subtitlePosition + 2).clamp(50, 100),
+            );
+            controller.applySubtitleSettings();
+          },
+        ),
+        _ColorGridRow(
+          label: l10n.textColor,
+          palette: _textColors,
+          selectedColor: settings.subtitleColor,
+          isTv: widget.isTv,
+          onSelected: (c) => applyStyle(color: c),
+        ),
+        _ColorGridRow(
+          label: l10n.backgroundColor,
+          palette: _bgColors,
+          selectedColor: settings.subtitleBackgroundColor,
+          isTv: widget.isTv,
+          onSelected: (c) => applyStyle(bg: c),
+        ),
+        _SubtitleAdjusterRow(
+          label: l10n.backgroundOpacity,
+          valueText: '${(settings.subtitleBackgroundOpacity * 100).round()}%',
+          isTv: widget.isTv,
+          onDecrease: () {
+            settingsNotifier.setSubtitleBackgroundOpacity(
+              (settings.subtitleBackgroundOpacity - 0.1).clamp(0.0, 1.0),
+            );
+            controller.applySubtitleSettings();
+          },
+          onIncrease: () {
+            settingsNotifier.setSubtitleBackgroundOpacity(
+              (settings.subtitleBackgroundOpacity + 0.1).clamp(0.0, 1.0),
+            );
+            controller.applySubtitleSettings();
+          },
+        ),
+        _PanelOptionRow(
+          label: l10n.resetToDefault,
+          leadingIcon: Icons.refresh_rounded,
+          selected: false,
+          isTv: widget.isTv,
+          onTap: () {
+            settingsNotifier.resetSubtitleSettings();
+            controller.applySubtitleSettings();
+          },
+        ),
+      ],
     ];
 
     return _OptionList(children: rows);
+  }
+}
+
+/// Content for the episodes side panel — the same right-drawer shell and row
+/// styling as the sources/tracks panel, but a single vertical list (episodes
+/// grouped under `Season N` subheaders). Pure Up/Down D-pad; the current episode
+/// is the focus anchor and is centred on open. Selecting an episode loads it and
+/// closes the pane. No dropdown, no scroll-jump animation.
+class PlayerEpisodesPanel extends ConsumerStatefulWidget {
+  final MultimediaItem item;
+  final bool isTv;
+  final VoidCallback onClose;
+
+  const PlayerEpisodesPanel({
+    super.key,
+    required this.item,
+    required this.onClose,
+    this.isTv = false,
+  });
+
+  @override
+  ConsumerState<PlayerEpisodesPanel> createState() =>
+      _PlayerEpisodesPanelState();
+}
+
+class _PlayerEpisodesPanelState extends ConsumerState<PlayerEpisodesPanel> {
+  final FocusNode _anchorNode = FocusNode(debugLabel: 'episodes_panel_anchor');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ref.read(playerControllerProvider).showEpisodeList) {
+        _focusAnchor();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _anchorNode.dispose();
+    super.dispose();
+  }
+
+  void _focusAnchor() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !ref.read(playerControllerProvider).showEpisodeList) {
+        return;
+      }
+      final ctx = _anchorNode.context;
+      if (ctx != null) {
+        _anchorNode.requestFocus();
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Restore focus to the current episode whenever the pane opens.
+    ref.listen(
+      playerControllerProvider.select((s) => s.showEpisodeList),
+      (prev, next) {
+        if (next == true && prev != true && mounted) _focusAnchor();
+      },
+    );
+
+    final l10n = AppLocalizations.of(context)!;
+    final episodes = widget.item.episodes ?? const <Episode>[];
+    final currentUrl =
+        ref.watch(
+          playerControllerProvider.select((s) => s.currentStream?.url),
+        ) ??
+        ref.read(playerControllerProvider.notifier).currentEpisodeUrl;
+    final historyRepo = ref.read(historyRepositoryProvider);
+
+    final seasons = episodes.map((e) => e.season).toSet().toList()..sort();
+    final multiSeason = seasons.length > 1;
+
+    final rows = <Widget>[];
+    var anchorAssigned = false;
+    for (final season in seasons) {
+      final seasonEps = episodes.where((e) => e.season == season).toList();
+      if (multiSeason) {
+        rows.add(_PanelSubheader(title: l10n.seasonWithNumber(season)));
+      }
+      for (final ep in seasonEps) {
+        final isCurrent = ep.url == currentUrl;
+        final isAnchor = isCurrent && !anchorAssigned;
+        if (isAnchor) anchorAssigned = true;
+        final pos = historyRepo.getEpisodePosition(
+          ep.url,
+          mainUrl: widget.item.url,
+          season: ep.season,
+          episode: ep.episode,
+        );
+        final dur = historyRepo.getEpisodeDuration(
+          ep.url,
+          mainUrl: widget.item.url,
+          season: ep.season,
+          episode: ep.episode,
+        );
+        rows.add(
+          _EpisodeRow(
+            episode: ep,
+            isCurrent: isCurrent,
+            progress: dur > 0 ? (pos / dur).clamp(0.0, 1.0) : 0.0,
+            isTv: widget.isTv,
+            focusNode: isAnchor ? _anchorNode : null,
+            onTap: () =>
+                ref.read(playerControllerProvider.notifier).loadEpisode(ep),
+          ),
+        );
+      }
+    }
+    // If nothing is currently playing from this list, anchor the first row.
+    if (!anchorAssigned && rows.isNotEmpty) {
+      final firstEpIndex = rows.indexWhere((w) => w is _EpisodeRow);
+      if (firstEpIndex != -1) {
+        final r = rows[firstEpIndex] as _EpisodeRow;
+        rows[firstEpIndex] = _EpisodeRow(
+          episode: r.episode,
+          isCurrent: r.isCurrent,
+          progress: r.progress,
+          isTv: r.isTv,
+          focusNode: _anchorNode,
+          onTap: r.onTap,
+        );
+      }
+    }
+
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 4, 12),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.video_library_outlined,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    l10n.episodes,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: HotstarPlayerStyle.primaryText,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: widget.onClose,
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 38,
+                    minHeight: 38,
+                  ),
+                  padding: EdgeInsets.zero,
+                  iconSize: 22,
+                  icon: const Icon(Icons.close_rounded),
+                  color: HotstarPlayerStyle.secondaryText,
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: HotstarPlayerStyle.divider, height: 1),
+          Expanded(
+            child: episodes.isEmpty
+                ? _EmptyHint(text: l10n.noEpisodesFound)
+                : _OptionList(children: rows),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A single episode row: focusable (same accent border/glow cue, no scale),
+/// shows "S·E", the title, a slim progress bar, and a play marker for the
+/// episode that's currently active.
+class _EpisodeRow extends StatefulWidget {
+  final Episode episode;
+  final bool isCurrent;
+  final double progress;
+  final bool isTv;
+  final FocusNode? focusNode;
+  final VoidCallback onTap;
+
+  const _EpisodeRow({
+    required this.episode,
+    required this.isCurrent,
+    required this.progress,
+    required this.isTv,
+    required this.onTap,
+    this.focusNode,
+  });
+
+  @override
+  State<_EpisodeRow> createState() => _EpisodeRowState();
+}
+
+class _EpisodeRowState extends State<_EpisodeRow> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ep = widget.episode;
+    final showHighlight = _focused || _hovered;
+    final ring = _focused && widget.isTv;
+    const accent = HotstarPlayerStyle.accent;
+    return Semantics(
+      button: true,
+      selected: widget.isCurrent,
+      label: ep.name,
+      child: Focus(
+        focusNode: widget.focusNode,
+        onFocusChange: (v) => setState(() => _focused = v),
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.select ||
+              key == LogicalKeyboardKey.enter ||
+              key == LogicalKeyboardKey.space) {
+            widget.onTap();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: HotstarPlayerStyle.fastMotionDuration,
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: widget.isCurrent
+                    ? accent.withValues(alpha: 0.14)
+                    : (showHighlight
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.transparent),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: ring ? accent : Colors.transparent,
+                  width: 1.5,
+                ),
+                boxShadow: ring
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 26,
+                    child: widget.isCurrent
+                        ? const Icon(
+                            Icons.play_arrow_rounded,
+                            color: accent,
+                            size: 22,
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'S${ep.season} : E${ep.episode}',
+                          style: TextStyle(
+                            color: widget.isCurrent
+                                ? accent
+                                : HotstarPlayerStyle.mutedText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          ep.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: widget.isCurrent
+                                ? HotstarPlayerStyle.primaryText
+                                : HotstarPlayerStyle.secondaryText,
+                            fontSize: 14,
+                            fontWeight: widget.isCurrent
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                        if (widget.progress > 0.02 && widget.progress < 0.98) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: widget.progress,
+                              minHeight: 3,
+                              backgroundColor: HotstarPlayerStyle.trackInactive,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -495,6 +1027,10 @@ class _OptionList extends StatelessWidget {
       policy: ReadingOrderTraversalPolicy(),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
+        // Build a generous off-screen window so the selected (anchor) row is
+        // laid out even when it starts below the fold — required for the
+        // open/tab-switch ensureVisible() to be able to scroll to it.
+        scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
         children: children,
       ),
     );
@@ -531,6 +1067,7 @@ class _PanelOptionRow extends StatefulWidget {
   final String? metadata;
   final bool selected;
   final bool isTv;
+  final bool enabled;
   final FocusNode? focusNode;
   final IconData? leadingIcon;
   final VoidCallback onTap;
@@ -543,6 +1080,7 @@ class _PanelOptionRow extends StatefulWidget {
     this.metadata,
     this.focusNode,
     this.leadingIcon,
+    this.enabled = true,
   });
 
   @override
@@ -555,11 +1093,18 @@ class _PanelOptionRowState extends State<_PanelOptionRow> {
 
   @override
   Widget build(BuildContext context) {
-    final showHighlight = _focused || _hovered;
+    final enabled = widget.enabled;
+    final showHighlight = enabled && (_focused || _hovered);
     final meta = widget.metadata?.trim();
     final hasMeta = meta != null && meta.isNotEmpty;
+    final labelColor = !enabled
+        ? HotstarPlayerStyle.mutedText
+        : (widget.selected
+              ? HotstarPlayerStyle.primaryText
+              : HotstarPlayerStyle.secondaryText);
     return Semantics(
       button: true,
+      enabled: enabled,
       selected: widget.selected,
       label: widget.label,
       child: Focus(
@@ -571,18 +1116,18 @@ class _PanelOptionRowState extends State<_PanelOptionRow> {
           if (key == LogicalKeyboardKey.select ||
               key == LogicalKeyboardKey.enter ||
               key == LogicalKeyboardKey.space) {
-            widget.onTap();
+            if (enabled) widget.onTap();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;
         },
         child: MouseRegion(
-          cursor: SystemMouseCursors.click,
+          cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
+            onTap: enabled ? widget.onTap : null,
             child: AnimatedContainer(
               duration: HotstarPlayerStyle.fastMotionDuration,
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -618,7 +1163,9 @@ class _PanelOptionRowState extends State<_PanelOptionRow> {
                     child: widget.leadingIcon != null
                         ? Icon(
                             widget.leadingIcon,
-                            color: HotstarPlayerStyle.secondaryText,
+                            color: enabled
+                                ? HotstarPlayerStyle.secondaryText
+                                : HotstarPlayerStyle.mutedText,
                             size: 20,
                           )
                         : (widget.selected
@@ -649,9 +1196,7 @@ class _PanelOptionRowState extends State<_PanelOptionRow> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: widget.selected
-                            ? HotstarPlayerStyle.primaryText
-                            : HotstarPlayerStyle.secondaryText,
+                        color: labelColor,
                         fontSize: 15,
                         fontWeight: widget.selected
                             ? FontWeight.w800
@@ -662,6 +1207,346 @@ class _PanelOptionRowState extends State<_PanelOptionRow> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small uppercase group label between sections inside a tab.
+class _PanelSubheader extends StatelessWidget {
+  final String title;
+
+  const _PanelSubheader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          color: HotstarPlayerStyle.mutedText,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+/// A settings row adjusted with Left/Right (D-pad/keyboard) while focused — it
+/// consumes those keys so the panel doesn't treat them as tab switches — and
+/// with the inline −/+ buttons for touch/mouse. Up/Down still traverse rows.
+/// Shows either a [valueText] or a colour [swatch].
+class _SubtitleAdjusterRow extends StatefulWidget {
+  final String label;
+  final String valueText;
+  final bool isTv;
+  final IconData decreaseIcon;
+  final IconData increaseIcon;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+
+  const _SubtitleAdjusterRow({
+    required this.label,
+    required this.isTv,
+    required this.valueText,
+    required this.onDecrease,
+    required this.onIncrease,
+    this.decreaseIcon = Icons.remove_rounded,
+    this.increaseIcon = Icons.add_rounded,
+  });
+
+  @override
+  State<_SubtitleAdjusterRow> createState() => _SubtitleAdjusterRowState();
+}
+
+class _SubtitleAdjusterRowState extends State<_SubtitleAdjusterRow> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final showHighlight = _focused || _hovered;
+    return Semantics(
+      label: widget.label,
+      value: widget.valueText,
+      child: Focus(
+        onFocusChange: (v) => setState(() => _focused = v),
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+            return KeyEventResult.ignored;
+          }
+          final key = event.logicalKey;
+          // Capture Left/Right so the panel doesn't switch tabs while a value
+          // is being adjusted. Up/Down fall through to row traversal.
+          if (key == LogicalKeyboardKey.arrowLeft) {
+            widget.onDecrease();
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowRight) {
+            widget.onIncrease();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: AnimatedContainer(
+            duration: HotstarPlayerStyle.fastMotionDuration,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+            decoration: BoxDecoration(
+              color: showHighlight
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _focused && widget.isTv
+                    ? HotstarPlayerStyle.accent
+                    : Colors.transparent,
+                width: 1.5,
+              ),
+              boxShadow: _focused && widget.isTv
+                  ? [
+                      BoxShadow(
+                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: HotstarPlayerStyle.secondaryText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // −/value/+ cluster: tappable for touch, not separately
+                // focusable so D-pad treats the whole row as one stop.
+                ExcludeFocus(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _StepButton(
+                        icon: widget.decreaseIcon,
+                        onTap: widget.onDecrease,
+                      ),
+                      SizedBox(width: 56, child: Center(child: _buildValue())),
+                      _StepButton(
+                        icon: widget.increaseIcon,
+                        onTap: widget.onIncrease,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildValue() {
+    return Text(
+      widget.valueText,
+      maxLines: 1,
+      style: const TextStyle(
+        color: HotstarPlayerStyle.primaryText,
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
+  }
+}
+
+/// Compact −/+ tap target for adjuster rows (touch/mouse). Not focusable; the
+/// parent row owns D-pad focus.
+class _StepButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _StepButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(icon, color: HotstarPlayerStyle.primaryText, size: 22),
+      ),
+    );
+  }
+}
+
+/// A label followed by a wrapped grid of colour swatches. Swatches are real
+/// focusable widgets in the panel's traversal group: Up/Down move between grid
+/// rows (and out to other settings) geometrically, while each swatch consumes
+/// Left/Right to step to the previous/next swatch in reading order — so the
+/// panel never mistakes them for tab switches.
+class _ColorGridRow extends StatelessWidget {
+  final String label;
+  final List<int> palette;
+  final int selectedColor;
+  final bool isTv;
+  final ValueChanged<int> onSelected;
+
+  const _ColorGridRow({
+    required this.label,
+    required this.palette,
+    required this.selectedColor,
+    required this.isTv,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: HotstarPlayerStyle.secondaryText,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: palette
+                .map(
+                  (value) => _ColorSwatch(
+                    colorValue: value,
+                    selected: value == selectedColor,
+                    isTv: isTv,
+                    onSelect: () => onSelected(value),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ColorSwatch extends StatefulWidget {
+  final int colorValue;
+  final bool selected;
+  final bool isTv;
+  final VoidCallback onSelect;
+
+  const _ColorSwatch({
+    required this.colorValue,
+    required this.selected,
+    required this.isTv,
+    required this.onSelect,
+  });
+
+  @override
+  State<_ColorSwatch> createState() => _ColorSwatchState();
+}
+
+class _ColorSwatchState extends State<_ColorSwatch> {
+  bool _focused = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(widget.colorValue);
+    final isTransparent = color.a == 0;
+    final ring = _focused && widget.isTv;
+    final checkColor = color.computeLuminance() > 0.5
+        ? Colors.black87
+        : Colors.white;
+    return Focus(
+      onFocusChange: (v) => setState(() => _focused = v),
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.select ||
+            key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.space) {
+          widget.onSelect();
+          return KeyEventResult.handled;
+        }
+        // Step between swatches in reading order; consume so the panel doesn't
+        // switch tabs. Up/Down bubble for vertical traversal.
+        if (key == LogicalKeyboardKey.arrowLeft) {
+          node.previousFocus();
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.arrowRight) {
+          node.nextFocus();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onSelect,
+          child: AnimatedContainer(
+            duration: HotstarPlayerStyle.fastMotionDuration,
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isTransparent ? Colors.transparent : color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: ring
+                    ? HotstarPlayerStyle.accent
+                    : (widget.selected
+                          ? Colors.white
+                          : (_hovered ? Colors.white70 : Colors.white24)),
+                width: ring || widget.selected ? 3 : 1.5,
+              ),
+              boxShadow: ring
+                  ? [
+                      BoxShadow(
+                        color: HotstarPlayerStyle.accent.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: widget.selected
+                ? Icon(Icons.check_rounded, size: 20, color: checkColor)
+                : (isTransparent
+                      ? const Icon(
+                          Icons.block_rounded,
+                          size: 18,
+                          color: Colors.white54,
+                        )
+                      : null),
           ),
         ),
       ),

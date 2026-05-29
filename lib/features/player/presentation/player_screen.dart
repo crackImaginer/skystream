@@ -61,6 +61,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   // seen — the single mechanism that keeps D-pad alive after auto-hide.
   final FocusNode _rootFocusNode = FocusNode(debugLabel: 'player_root');
 
+  // Some TVs deliver a single Back press through two channels (a goBack
+  // KeyEvent *and* a route pop). This timestamp de-dupes them so one physical
+  // press performs exactly one back action — see [_consumeBack].
+  DateTime? _lastBackAt;
+
   bool _isTv = false;
   bool _isTablet = false;
   bool _wasPlayingBeforeBackground = false;
@@ -279,6 +284,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     final rootHasFocus = FocusManager.instance.primaryFocus == node;
 
+    // Escape (desktop/keyboard) → dismiss via the single guarded handler.
+    // Hardware/remote Back is intentionally NOT handled here: on Android/TV it
+    // is delivered reliably to PopScope (the navigation channel), and the
+    // redundant goBack KeyEvent must stay unhandled so the two deliveries can't
+    // both act and walk past a dismissal into exiting the player. Desktop has
+    // no PopScope-back, so Escape is its dismissal key.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      return _consumeBack()
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+
     // Space-hold → 2× speed (non-TV). Only when no control is focused, so
     // Space still activates a focused button normally.
     if (!_isTv &&
@@ -378,10 +396,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           event.logicalKey == LogicalKeyboardKey.escape) {
         return KeyEventResult.ignored;
       }
+      // First press just wakes the chrome (focus lands on play/pause). It does
+      // NOT toggle playback — pressing OK again, now that play/pause is focused,
+      // is what pauses/plays. (Avoids the jarring "OK pauses then shows chrome".)
       _controlsKeyFinal.currentState?.showControls();
-      if (_isPlayActivationKey(event)) {
-        _controlsKeyFinal.currentState?.togglePlayPause();
-      }
       return KeyEventResult.handled;
     }
 
@@ -429,6 +447,39 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     return KeyEventResult.ignored;
+  }
+
+  /// The single Back-handling decision, shared by the root key handler and
+  /// PopScope. Performs at most one dismissal — close the sources panel, else
+  /// (on TV, while playing) hide the controls — and de-dupes the duplicate Back
+  /// delivery within a short window. Returns true when the press was consumed
+  /// (the caller must NOT exit); false when there's nothing left to dismiss.
+  bool _consumeBack() {
+    final now = DateTime.now();
+    if (_lastBackAt != null &&
+        now.difference(_lastBackAt!) < const Duration(milliseconds: 200)) {
+      // Near-instant duplicate delivery of the same physical press — swallow
+      // it. Short enough not to eat an intentional fast double-press.
+      return true;
+    }
+    if (ref.read(playerControllerProvider).showSourcesPanel) {
+      _lastBackAt = now;
+      _controlsKeyFinal.currentState?.closeSourcesPanel();
+      return true;
+    }
+    if (_isTv && _controlsVisible.value) {
+      final isPlaying =
+          ref.read(playerControllerProvider.select((s) => s.useExoPlayer))
+          ? _videoViewController.playbackState.value ==
+                vv.VideoControllerPlaybackState.playing
+          : _player.state.playing;
+      if (isPlaying) {
+        _lastBackAt = now;
+        _controlsKeyFinal.currentState?.hideControls();
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _handleBack() async {
@@ -521,31 +572,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
           canPop: false,
           onPopInvokedWithResult: (didPop, result) async {
             if (didPop) return;
-            // Sources side panel open → Back closes it and restores the chrome
-            // (with a fresh auto-hide timer), on every platform. This must come
-            // first so Back never exits the player while the panel is up.
-            if (ref.read(
-              playerControllerProvider.select((s) => s.showSourcesPanel),
-            )) {
-              _controlsKeyFinal.currentState?.closeSourcesPanel();
-              return;
-            }
-            // On TV: intercept back to hide controls first (if controls are
-            // visible and video is playing), so the user doesn't exit by accident.
-            // On phone/tablet: always pop directly — no two-step back.
-            if (_isTv && _controlsVisible.value) {
-              final isPlaying =
-                  ref.read(
-                    playerControllerProvider.select((s) => s.useExoPlayer),
-                  )
-                  ? _videoViewController.playbackState.value ==
-                        vv.VideoControllerPlaybackState.playing
-                  : _player.state.playing;
-              if (isPlaying) {
-                _controlsKeyFinal.currentState?.hideControls();
-                return;
-              }
-            }
+            // Single guarded path (shared with the root key handler): close the
+            // sources panel, else hide TV controls. Only exit when nothing is
+            // left to dismiss. The de-dupe inside prevents the dual Back
+            // delivery (KeyEvent + route-pop) from skipping a step into exit.
+            if (_consumeBack()) return;
             await _handleBack();
           },
           child: Scaffold(

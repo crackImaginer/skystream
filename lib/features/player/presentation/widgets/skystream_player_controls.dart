@@ -1286,9 +1286,6 @@ class SkyStreamPlayerControlsState
           onPressed: _toggleOrientation,
           isTv: _isTv,
         ),
-    ];
-
-    final trailing = <Widget>[
       if (isSeries)
         PlayerIconButton(
           icon: Icons.playlist_play_rounded,
@@ -1405,7 +1402,6 @@ class SkyStreamPlayerControlsState
                     ),
                     leading: leading,
                     actions: actions,
-                    trailing: trailing,
                   ),
                 ),
               ],
