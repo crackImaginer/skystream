@@ -8,6 +8,7 @@ class NextEpisodeOverlay extends StatelessWidget {
   final VoidCallback onPlayNext;
   final VoidCallback onDismiss;
   final bool isTv;
+  final FocusNode? focusNode;
 
   const NextEpisodeOverlay({
     super.key,
@@ -15,18 +16,21 @@ class NextEpisodeOverlay extends StatelessWidget {
     required this.onPlayNext,
     required this.onDismiss,
     this.isTv = false,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return PlayerPromptPlacement(
+      isTv: isTv,
       child: CountdownFillButton(
+        focusNode: focusNode,
         label: l10n.playNow,
         subtitle: nextEpisodeTitle,
         duration: const Duration(seconds: 15),
         onPressed: onPlayNext,
-        onTimeout: () {},
+        onTimeout: onPlayNext,
         isTv: isTv,
       ),
     );

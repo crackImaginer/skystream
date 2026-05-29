@@ -211,6 +211,7 @@ class PlayerBottomSheets {
                               iconSize: 36,
                               icon: const Icon(Icons.close),
                               tooltip: l10n.cancel,
+                              autofocus: true,
                             ),
                           ],
                         ),
@@ -382,6 +383,7 @@ class PlayerBottomSheets {
                           path.toLowerCase().endsWith(".mov");
 
                       return ListTile(
+                        autofocus: index == 0,
                         leading: Icon(
                           isVideo
                               ? Icons.movie_creation_outlined
@@ -568,10 +570,11 @@ class PlayerBottomSheets {
                                 ),
                               ),
                             ),
-                            IconButton(
+                             IconButton(
                               onPressed: () => Navigator.pop(ctx),
                               icon: const Icon(Icons.close),
                               color: HotstarPlayerStyle.secondaryText,
+                              autofocus: true,
                             ),
                           ],
                         ),
@@ -638,41 +641,11 @@ class PlayerBottomSheets {
                           children: speeds.map((speed) {
                             final isSelected =
                                 (selectedSpeed - speed).abs() < 0.01;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => setSpeed(speed),
-                                borderRadius: BorderRadius.circular(6),
-                                child: AnimatedContainer(
-                                  duration:
-                                      HotstarPlayerStyle.fastMotionDuration,
-                                  width: isCompact ? 76 : 104,
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: isCompact ? 10 : 14,
-                                  ),
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? HotstarPlayerStyle.accent.withValues(
-                                            alpha: 0.22,
-                                          )
-                                        : Colors.white.withValues(alpha: 0.06),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    _formatSpeed(speed),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? HotstarPlayerStyle.primaryText
-                                          : HotstarPlayerStyle.secondaryText,
-                                      fontSize: isCompact ? 13 : 15,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            return _SpeedPresetChip(
+                              speed: speed,
+                              isSelected: isSelected,
+                              isCompact: isCompact,
+                              onTap: () => setSpeed(speed),
                             );
                           }).toList(),
                         ),
@@ -697,17 +670,10 @@ class PlayerBottomSheets {
     required VoidCallback? onPressed,
     bool compact = false,
   }) {
-    return IconButton(
+    return _SpeedStepButton(
+      icon: icon,
       onPressed: onPressed,
-      icon: Icon(icon, size: compact ? 20 : 24),
-      color: HotstarPlayerStyle.primaryText,
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.06),
-        fixedSize: Size(compact ? 42 : 56, compact ? 42 : 56),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(compact ? 10 : 14),
-        ),
-      ),
+      compact: compact,
     );
   }
 
@@ -2143,7 +2109,7 @@ class _HotstarOptionColumn extends StatelessWidget {
   }
 }
 
-class _HotstarOptionRow extends StatelessWidget {
+class _HotstarOptionRow extends StatefulWidget {
   final String label;
   final String? metadata;
   final bool selected;
@@ -2157,66 +2123,243 @@ class _HotstarOptionRow extends StatelessWidget {
   });
 
   @override
+  State<_HotstarOptionRow> createState() => _HotstarOptionRowState();
+}
+
+class _HotstarOptionRowState extends State<_HotstarOptionRow> {
+  bool _isFocused = false;
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final isCompact = size.shortestSide < 600;
-    return InkWell(
-      onTap: onTap,
-      hoverColor: HotstarPlayerStyle.accent.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(4),
-      child: AnimatedContainer(
-        duration: HotstarPlayerStyle.fastMotionDuration,
-        padding: EdgeInsets.symmetric(
-          horizontal: isCompact ? 8 : 12,
-          vertical: isCompact ? 5 : 8,
-        ),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.04)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: isCompact ? 22 : 28,
-              child: selected
-                  ? const Icon(
-                      Icons.check,
-                      color: HotstarPlayerStyle.accent,
-                      size: 22,
-                    )
+    final showHighlight = _isHovered || _isFocused;
+
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
+      onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+      child: InkWell(
+        onTap: widget.onTap,
+        hoverColor: HotstarPlayerStyle.accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+        child: AnimatedScale(
+          scale: _isFocused ? 1.02 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: HotstarPlayerStyle.fastMotionDuration,
+            padding: EdgeInsets.symmetric(
+              horizontal: isCompact ? 8 : 12,
+              vertical: isCompact ? 5 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? Colors.white.withValues(alpha: 0.04)
+                  : (showHighlight
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.transparent),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: _isFocused
+                    ? HotstarPlayerStyle.accent
+                    : Colors.transparent,
+                width: 1.5,
+              ),
+              boxShadow: _isFocused
+                  ? [
+                      BoxShadow(
+                        color: HotstarPlayerStyle.accent.withValues(
+                          alpha: 0.25,
+                        ),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
                   : null,
             ),
-            SizedBox(width: isCompact ? 10 : 18),
-            Flexible(
-              child: RichText(
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  text: label,
-                  style: TextStyle(
-                    color: selected
-                        ? HotstarPlayerStyle.primaryText
-                        : HotstarPlayerStyle.mutedText,
-                    fontSize: isCompact ? 15 : 18,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
-                  ),
-                  children: [
-                    if (metadata != null && metadata!.trim().isNotEmpty)
-                      TextSpan(
-                        text: '  ${metadata!.trim()}',
-                        style: TextStyle(
-                          color: HotstarPlayerStyle.mutedText,
-                          fontSize: isCompact ? 15 : 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                  ],
+            child: Row(
+              children: [
+                SizedBox(
+                  width: isCompact ? 22 : 28,
+                  child: widget.selected
+                      ? const Icon(
+                          Icons.check,
+                          color: HotstarPlayerStyle.accent,
+                          size: 22,
+                        )
+                      : null,
                 ),
+                SizedBox(width: isCompact ? 10 : 18),
+                Flexible(
+                  child: RichText(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    text: TextSpan(
+                      text: widget.label,
+                      style: TextStyle(
+                        color: widget.selected
+                            ? HotstarPlayerStyle.primaryText
+                            : HotstarPlayerStyle.mutedText,
+                        fontSize: isCompact ? 15 : 18,
+                        fontWeight:
+                            widget.selected ? FontWeight.w800 : FontWeight.w700,
+                      ),
+                      children: [
+                        if (widget.metadata != null &&
+                            widget.metadata!.trim().isNotEmpty)
+                          TextSpan(
+                            text: '  ${widget.metadata!.trim()}',
+                            style: TextStyle(
+                              color: HotstarPlayerStyle.mutedText,
+                              fontSize: isCompact ? 15 : 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpeedPresetChip extends StatefulWidget {
+  final double speed;
+  final bool isSelected;
+  final bool isCompact;
+  final VoidCallback onTap;
+
+  const _SpeedPresetChip({
+    required this.speed,
+    required this.isSelected,
+    required this.isCompact,
+    required this.onTap,
+  });
+
+  @override
+  State<_SpeedPresetChip> createState() => _SpeedPresetChipState();
+}
+
+class _SpeedPresetChipState extends State<_SpeedPresetChip> {
+  bool _isFocused = false;
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final showHighlight = _isHovered || _isFocused;
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
+      onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: AnimatedScale(
+          scale: _isFocused ? 1.05 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: HotstarPlayerStyle.fastMotionDuration,
+            width: widget.isCompact ? 76 : 104,
+            padding: EdgeInsets.symmetric(
+              vertical: widget.isCompact ? 10 : 14,
+            ),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: widget.isSelected
+                  ? HotstarPlayerStyle.accent.withValues(
+                      alpha: 0.22,
+                    )
+                  : (showHighlight
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.06)),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _isFocused
+                    ? HotstarPlayerStyle.accent
+                    : Colors.transparent,
+                width: 1.5,
+              ),
+              boxShadow: _isFocused
+                  ? [
+                      BoxShadow(
+                        color:
+                            HotstarPlayerStyle.accent.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              PlayerBottomSheets._formatSpeed(widget.speed),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: TextStyle(
+                color: widget.isSelected
+                    ? HotstarPlayerStyle.primaryText
+                    : HotstarPlayerStyle.secondaryText,
+                fontSize: widget.isCompact ? 13 : 15,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpeedStepButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool compact;
+
+  const _SpeedStepButton({
+    required this.icon,
+    required this.onPressed,
+    required this.compact,
+  });
+
+  @override
+  State<_SpeedStepButton> createState() => _SpeedStepButtonState();
+}
+
+class _SpeedStepButtonState extends State<_SpeedStepButton> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
+      child: AnimatedScale(
+        scale: _isFocused ? 1.08 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        child: IconButton(
+          onPressed: widget.onPressed,
+          icon: Icon(widget.icon, size: widget.compact ? 20 : 24),
+          color: HotstarPlayerStyle.primaryText,
+          style: IconButton.styleFrom(
+            backgroundColor: _isFocused
+                ? HotstarPlayerStyle.accent.withValues(alpha: 0.22)
+                : Colors.white.withValues(alpha: 0.06),
+            fixedSize: Size(widget.compact ? 42 : 56, widget.compact ? 42 : 56),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(widget.compact ? 10 : 14),
+              side: BorderSide(
+                color: _isFocused
+                    ? HotstarPlayerStyle.accent
+                    : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+          ),
         ),
       ),
     );

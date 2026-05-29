@@ -69,6 +69,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Timer? _spaceHoldTimer;
 
   late final PlayerController _playerController;
+  ProviderSubscription<AsyncValue<PlayerSettings>>? _settingsSub;
 
   @override
   void initState() {
@@ -118,7 +119,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // Phase 8: Initialize video_view engine (ExoPlayer on Android, AVPlayer on iOS/macOS)
     _videoViewController = vv.VideoController(autoPlay: true);
 
-    ref.listenManual<AsyncValue<PlayerSettings>>(playerSettingsProvider, (
+    _settingsSub = ref.listenManual<AsyncValue<PlayerSettings>>(playerSettingsProvider, (
       _,
       next,
     ) {
@@ -228,6 +229,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       }
     }
 
+    _settingsSub?.close();
     _playerController.disposeController();
 
     _player.dispose();
@@ -359,9 +361,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
 
     // From here the root has focus — no control is focused (controls hidden
-    // or video-only). On TV, the first press just reveals the controls (and
-    // play/select also toggles playback); focus then snaps to play/pause.
+    // or video-only). On TV, if controls are visible, we recover focus.
+    if (_isTv && _controlsVisible.value) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+          event.logicalKey == LogicalKeyboardKey.arrowDown ||
+          event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+          event.logicalKey == LogicalKeyboardKey.arrowRight ||
+          _isPlayActivationKey(event)) {
+        _controlsKeyFinal.currentState?.showControls();
+        return KeyEventResult.handled;
+      }
+    }
+
     if (_isTv && !_controlsVisible.value) {
+      if (event.logicalKey == LogicalKeyboardKey.goBack ||
+          event.logicalKey == LogicalKeyboardKey.escape) {
+        return KeyEventResult.ignored;
+      }
       _controlsKeyFinal.currentState?.showControls();
       if (_isPlayActivationKey(event)) {
         _controlsKeyFinal.currentState?.togglePlayPause();

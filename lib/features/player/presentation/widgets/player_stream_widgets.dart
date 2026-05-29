@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_view/video_view.dart' as vv;
@@ -21,6 +20,9 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
   /// the configured step and the thumb enlarges while focused. Off TV the
   /// slider stays pointer-only (it is reached by touch/mouse, not focus).
   final bool isTv;
+  final FocusNode? focusNode;
+  final VoidCallback? onArrowUp;
+  final VoidCallback? onArrowDown;
 
   const PlayerProgressBar({
     super.key,
@@ -29,6 +31,9 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
     this.onSeekStart,
     this.onSeekEnd,
     this.isTv = false,
+    this.focusNode,
+    this.onArrowUp,
+    this.onArrowDown,
   });
 
   @override
@@ -38,8 +43,9 @@ class PlayerProgressBar extends ConsumerStatefulWidget {
 class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
   double? _dragValue;
   bool _scrubFocused = false;
-  final FocusNode _scrubFocusNode = FocusNode(debugLabel: 'scrubber');
+  late final FocusNode _scrubFocusNode;
   static const double _sliderTrackInset = 24;
+  ProviderSubscription<int>? _streamIndexSub;
 
   // ValueNotifiers so position/duration updates don't setState the whole widget.
   final _vvPositionNotifier = ValueNotifier<int>(0);
@@ -48,22 +54,25 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
   @override
   void initState() {
     super.initState();
+    _scrubFocusNode = widget.focusNode ?? FocusNode(debugLabel: 'scrubber');
     widget.videoViewController?.position.addListener(_onVvPosition);
     widget.videoViewController?.mediaInfo.addListener(_onVvMediaInfo);
     _syncVideoViewProgress();
-    // Drop any stale scrub-drag value when the active stream changes
-    // (source switch, episode change, quality change). Otherwise the
-    // thumb stays pinned to the previous drag position until the user
-    // touches it again — confusing in particular when switching to a
-    // shorter source where the drag value is now beyond duration.
     _watchStreamChanges();
+    _scrubFocusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted) {
+      setState(() => _scrubFocused = _scrubFocusNode.hasFocus);
+    }
   }
 
   void _watchStreamChanges() {
     // `currentStreamIndex` ticks every time the active source changes
     // (source picker, quality switch, episode autoplay). Cheap int
     // comparison; no allocations.
-    ref.listenManual<int>(
+    _streamIndexSub = ref.listenManual<int>(
       playerControllerProvider.select((s) => s.currentStreamIndex),
       (prev, next) {
         if (prev != null && prev != next && _dragValue != null && mounted) {
@@ -103,34 +112,14 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
   void dispose() {
     widget.videoViewController?.position.removeListener(_onVvPosition);
     widget.videoViewController?.mediaInfo.removeListener(_onVvMediaInfo);
+    _scrubFocusNode.removeListener(_onFocusChange);
+    _streamIndexSub?.close();
     _vvPositionNotifier.dispose();
     _vvDurationNotifier.dispose();
-    _scrubFocusNode.dispose();
+    if (widget.focusNode == null) {
+      _scrubFocusNode.dispose();
+    }
     super.dispose();
-  }
-
-  /// D-pad Left/Right seek while the scrubber holds focus on TV. Uses the
-  /// user's configured seek step, matching the center seek buttons.
-  KeyEventResult _handleScrubKey(KeyEvent event, bool canSeek) {
-    if (!canSeek) return KeyEventResult.ignored;
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final step =
-        ref.read(playerSettingsProvider).asData?.value.seekDuration ?? 10;
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      ref
-          .read(playerControllerProvider.notifier)
-          .seekRelative(Duration(seconds: -step));
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      ref
-          .read(playerControllerProvider.notifier)
-          .seekRelative(Duration(seconds: step));
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   String _formatDuration(Duration duration) {
@@ -256,6 +245,9 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
       playerControllerProvider.select((s) => s.skipSegments),
     );
 
+    _scrubFocusNode.canRequestFocus = widget.isTv && canSeek;
+    _scrubFocusNode.skipTraversal = !(widget.isTv && canSeek);
+
     if (useExoPlayer && widget.videoViewController != null) {
       return _buildVideoViewBar(canSeek: canSeek, skipSegments: skipSegments);
     }
@@ -379,6 +371,11 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
     bool isLive = false,
   }) {
     final isDragging = _dragValue != null;
+    final seekDuration = ref.watch(
+      playerSettingsProvider.select((s) => s.asData?.value.seekDuration),
+    ) ?? 10;
+    final step = (seekDuration * 1000).toDouble();
+
     return SizedBox(
       height: 58,
       child: Padding(
@@ -391,166 +388,155 @@ class _PlayerProgressBarState extends ConsumerState<PlayerProgressBar> {
               duration: duration,
               displayDuration: displayDuration,
             ),
-            Focus(
-              focusNode: _scrubFocusNode,
-              canRequestFocus: widget.isTv && canSeek,
-              skipTraversal: !(widget.isTv && canSeek),
-              onFocusChange: (f) {
-                if (mounted) setState(() => _scrubFocused = f);
-              },
-              onKeyEvent: (node, event) => _handleScrubKey(event, canSeek),
-              child: SizedBox(
-                height: 34,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    const tooltipWidth = 76.0;
-                    final scrubPercent = durationMs > 0
-                        ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
-                        : 0.0;
-                    final maxTooltipLeft = constraints.maxWidth > tooltipWidth
-                        ? constraints.maxWidth - tooltipWidth
-                        : 0.0;
-                    final tooltipLeft =
-                        (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
-                            .clamp(0.0, maxTooltipLeft)
-                            .toDouble();
+            SizedBox(
+              height: 34,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const tooltipWidth = 76.0;
+                  final scrubPercent = durationMs > 0
+                      ? (displayValue / durationMs).clamp(0.0, 1.0).toDouble()
+                      : 0.0;
+                  final maxTooltipLeft = constraints.maxWidth > tooltipWidth
+                      ? constraints.maxWidth - tooltipWidth
+                      : 0.0;
+                  final tooltipLeft =
+                      (constraints.maxWidth * scrubPercent - tooltipWidth / 2)
+                          .clamp(0.0, maxTooltipLeft)
+                          .toDouble();
 
-                    return Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.none,
-                      children: [
-                        ?bufferWidget,
-                        if (durationMs > 0 && skipSegments.isNotEmpty)
-                          ...skipSegments.map((seg) {
-                            final leftPercent =
-                                (seg.startTime * 1000 / durationMs).clamp(
-                                  0.0,
-                                  1.0,
-                                );
-                            final rightPercent =
-                                (seg.endTime * 1000 / durationMs).clamp(
-                                  0.0,
-                                  1.0,
-                                );
-                            if (leftPercent >= rightPercent) {
-                              return const SizedBox.shrink();
-                            }
+                  return Stack(
+                    alignment: Alignment.center,
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (bufferWidget != null) bufferWidget,
+                      if (durationMs > 0 && skipSegments.isNotEmpty)
+                        ...skipSegments.map((seg) {
+                          final leftPercent =
+                              (seg.startTime * 1000 / durationMs).clamp(
+                                0.0,
+                                1.0,
+                              );
+                          final rightPercent =
+                              (seg.endTime * 1000 / durationMs).clamp(
+                                0.0,
+                                1.0,
+                              );
+                          if (leftPercent >= rightPercent) {
+                            return const SizedBox.shrink();
+                          }
 
-                            return Positioned(
-                              left: constraints.maxWidth * leftPercent,
-                              width:
-                                  constraints.maxWidth *
-                                  (rightPercent - leftPercent),
-                              height: 2.5,
-                              child: ColoredBox(
-                                color: HotstarPlayerStyle.accent.withValues(
-                                  alpha: 0.8,
-                                ),
+                          return Positioned(
+                            left: constraints.maxWidth * leftPercent,
+                            width:
+                                constraints.maxWidth *
+                                (rightPercent - leftPercent),
+                            height: 2.5,
+                            child: ColoredBox(
+                              color: HotstarPlayerStyle.accent.withValues(
+                                alpha: 0.8,
                               ),
-                            );
-                          }),
-                        SliderTheme(
-                          data: SliderThemeData(
-                            trackHeight: _scrubFocused ? 4 : 2.5,
-                            thumbShape: RoundSliderThumbShape(
-                              enabledThumbRadius: canSeek
-                                  ? (isDragging ? 8 : (_scrubFocused ? 9 : 6))
-                                  // Hide the thumb entirely when the stream
-                                  // isn't seekable (live) — a visible thumb
-                                  // that doesn't respond to drag is the worst
-                                  // UX, users tap it and assume the player is
-                                  // broken.
-                                  : 0,
                             ),
-                            overlayShape: RoundSliderOverlayShape(
-                              overlayRadius: canSeek
-                                  ? (isDragging || _scrubFocused ? 16 : 10)
-                                  : 0,
-                            ),
-                            activeTrackColor: canSeek
-                                ? HotstarPlayerStyle.accent
-                                : HotstarPlayerStyle.accent.withValues(
-                                    alpha: 0.5,
-                                  ),
-                            inactiveTrackColor:
-                                HotstarPlayerStyle.trackInactive,
-                            disabledActiveTrackColor: HotstarPlayerStyle.accent
-                                .withValues(alpha: 0.5),
-                            disabledInactiveTrackColor:
-                                HotstarPlayerStyle.trackInactive,
-                            disabledThumbColor: Colors.transparent,
-                            trackShape: const RoundedRectSliderTrackShape(),
-                            thumbColor: Colors.white,
-                            overlayColor: HotstarPlayerStyle.accent.withValues(
-                              alpha: 0.18,
-                            ),
+                          );
+                        }),
+                      SliderTheme(
+                        data: SliderThemeData(
+                          trackHeight: _scrubFocused ? 4 : 2.5,
+                          thumbShape: RoundSliderThumbShape(
+                            enabledThumbRadius: canSeek
+                                ? (isDragging ? 8 : (_scrubFocused ? 9 : 6))
+                                : 0,
                           ),
-                          child: CustomSlider(
-                            value: displayValue.clamp(
-                              0,
-                              durationMs > 0 ? durationMs : 1.0,
-                            ),
-                            min: 0.0,
-                            max: durationMs > 0 ? durationMs : 1.0,
-                            step: 5000,
-                            onChanged: canSeek
-                                ? (val) => setState(() => _dragValue = val)
-                                : null,
-                            onChangeStart: canSeek
-                                ? (val) {
-                                    widget.onSeekStart?.call();
-                                    setState(() => _dragValue = val);
-                                  }
-                                : null,
-                            onChangeEnd: canSeek
-                                ? (val) {
-                                    onSeekEnd(val);
-                                    widget.onSeekEnd?.call();
-                                    setState(() => _dragValue = null);
-                                  }
-                                : null,
+                          overlayShape: RoundSliderOverlayShape(
+                            overlayRadius: canSeek
+                                ? (isDragging || _scrubFocused ? 16 : 10)
+                                : 0,
+                          ),
+                          activeTrackColor: canSeek
+                              ? HotstarPlayerStyle.accent
+                              : HotstarPlayerStyle.accent.withValues(
+                                  alpha: 0.5,
+                                ),
+                          inactiveTrackColor:
+                              HotstarPlayerStyle.trackInactive,
+                          disabledActiveTrackColor: HotstarPlayerStyle.accent
+                              .withValues(alpha: 0.5),
+                          disabledInactiveTrackColor:
+                              HotstarPlayerStyle.trackInactive,
+                          disabledThumbColor: Colors.transparent,
+                          trackShape: const RoundedRectSliderTrackShape(),
+                          thumbColor: Colors.white,
+                          overlayColor: HotstarPlayerStyle.accent.withValues(
+                            alpha: 0.18,
                           ),
                         ),
-                        if (isDragging)
-                          Positioned(
-                            left: tooltipLeft,
-                            bottom: 34,
-                            child: IgnorePointer(
-                              child: SizedBox(
-                                width: tooltipWidth,
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
+                        child: CustomSlider(
+                          value: displayValue.clamp(
+                            0,
+                            durationMs > 0 ? durationMs : 1.0,
+                          ),
+                          min: 0.0,
+                          max: durationMs > 0 ? durationMs : 1.0,
+                          step: step,
+                          focusNode: _scrubFocusNode,
+                          onArrowUp: widget.onArrowUp,
+                          onArrowDown: widget.onArrowDown,
+                          onChanged: canSeek
+                              ? (val) => setState(() => _dragValue = val)
+                              : null,
+                          onChangeStart: canSeek
+                              ? (val) {
+                                  widget.onSeekStart?.call();
+                                  setState(() => _dragValue = val);
+                                }
+                              : null,
+                          onChangeEnd: canSeek
+                              ? (val) {
+                                  onSeekEnd(val);
+                                  widget.onSeekEnd?.call();
+                                  setState(() => _dragValue = null);
+                                }
+                              : null,
+                        ),
+                      ),
+                      if (isDragging)
+                        Positioned(
+                          left: tooltipLeft,
+                          bottom: 34,
+                          child: IgnorePointer(
+                            child: SizedBox(
+                              width: tooltipWidth,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(
+                                      alpha: 0.82,
                                     ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.82,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      _formatDuration(displayDuration),
-                                      maxLines: 1,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _formatDuration(displayDuration),
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures(),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                      ],
-                    );
-                  },
-                ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],

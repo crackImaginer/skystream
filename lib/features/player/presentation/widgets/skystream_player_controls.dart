@@ -115,6 +115,13 @@ class SkyStreamPlayerControlsState
   // here (the bottom-row play/pause). Directional traversal handles every
   // other movement between controls — no other requestFocus calls exist.
   late final FocusNode _playFocusNode;
+  late final FocusNode _backFocusNode;
+  late final FocusNode _scrubFocusNode;
+  late final FocusNode _resumeFocusNode;
+  late final FocusNode _nextEpFocusNode;
+  late final FocusNode _skipFocusNode;
+  bool _isSkipActive = false;
+  ProviderSubscription<dynamic>? _revertMessageSub;
 
   @override
   void initState() {
@@ -175,6 +182,11 @@ class SkyStreamPlayerControlsState
         );
 
     _playFocusNode = FocusNode();
+    _backFocusNode = FocusNode(debugLabel: 'back_button');
+    _scrubFocusNode = FocusNode(debugLabel: 'controls_scrubber');
+    _resumeFocusNode = FocusNode(debugLabel: 'resume_prompt');
+    _nextEpFocusNode = FocusNode(debugLabel: 'next_episode_prompt');
+    _skipFocusNode = FocusNode(debugLabel: 'skip_segment_prompt');
     try {
       FlutterVolumeController.updateShowSystemUI(false);
     } catch (e) {
@@ -299,7 +311,7 @@ class SkyStreamPlayerControlsState
 
     // Surface revert-failure messages as a SnackBar whenever the controller
     // sets one (e.g., source switch failed → reverted to previous stream).
-    ref.listenManual(playerControllerProvider, (_, _) {
+    _revertMessageSub = ref.listenManual(playerControllerProvider, (_, _) {
       final msg = ref
           .read(playerControllerProvider.notifier)
           .consumeRevertMessage();
@@ -332,7 +344,13 @@ class SkyStreamPlayerControlsState
       );
     }
     FocusManager.instance.removeListener(_onFocusChange);
+    _revertMessageSub?.close();
     _playFocusNode.dispose();
+    _backFocusNode.dispose();
+    _scrubFocusNode.dispose();
+    _resumeFocusNode.dispose();
+    _nextEpFocusNode.dispose();
+    _skipFocusNode.dispose();
     _hideTimer?.cancel();
     _seekAnimController.dispose();
     for (final s in _subscriptions) {
@@ -470,7 +488,13 @@ class SkyStreamPlayerControlsState
     widget.onVisibilityChanged?.call(_isVisible);
     if (_isVisible) {
       _startHideTimer();
-      if (_isTv) _playFocusNode.requestFocus();
+      if (_isTv) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isVisible) {
+            _playFocusNode.requestFocus();
+          }
+        });
+      }
     } else {
       _returnFocusToRoot();
     }
@@ -497,7 +521,13 @@ class SkyStreamPlayerControlsState
       // On TV, always restore focus to the play/pause button when controls
       // become visible — autofocus only fires once when the widget first mounts,
       // so after hide/show cycles we must request focus explicitly.
-      if (_isTv) _playFocusNode.requestFocus();
+      if (_isTv) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _isVisible) {
+            _playFocusNode.requestFocus();
+          }
+        });
+      }
     }
   }
 
@@ -532,7 +562,13 @@ class SkyStreamPlayerControlsState
         // them back — restore focus to the play button so the user has a
         // live anchor to navigate from. Without this, OK-while-hidden
         // showed the controls but left nothing focused, stranding D-pad.
-        if (_isTv) _playFocusNode.requestFocus();
+        if (_isTv) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _isVisible) {
+              _playFocusNode.requestFocus();
+            }
+          });
+        }
       }
       _startHideTimer();
     }
@@ -946,6 +982,7 @@ class SkyStreamPlayerControlsState
                 if (resumePromptPosition != null ||
                     resumePromptPercentage != null)
                   ResumePromptOverlay(
+                    focusNode: _resumeFocusNode,
                     positionMs: resumePromptPosition,
                     percentage: resumePromptPercentage,
                     onResume: () => ref
@@ -963,6 +1000,7 @@ class SkyStreamPlayerControlsState
                     showNextEpOverlay &&
                     nextEpTitle != null)
                   NextEpisodeOverlay(
+                    focusNode: _nextEpFocusNode,
                     nextEpisodeTitle: nextEpTitle,
                     onPlayNext: () => ref
                         .read(playerControllerProvider.notifier)
@@ -981,64 +1019,44 @@ class SkyStreamPlayerControlsState
                     !showNextEpOverlay &&
                     skipSegments.isNotEmpty)
                   SkipSegmentOverlay(
+                    focusNode: _skipFocusNode,
+                    onActiveSegmentChanged: (active) {
+                      if (mounted) {
+                        setState(() {
+                          _isSkipActive = active;
+                        });
+                      }
+                    },
                     player: widget.player,
                     videoViewController: widget.videoViewController,
                     skipSegments: skipSegments,
                     isTv: _isTv,
+                    controlsVisible: _isVisible,
+                    onFocusReturned: () {
+                      if (_isVisible) {
+                        _playFocusNode.requestFocus();
+                      } else {
+                        _returnFocusToRoot();
+                      }
+                    },
                   ),
 
                 // Episode Sidebar Overlay
-                if (isSeries) ...[
-                  // Edge Arrow Toggle (only when controls are visible, list is closed, and not locked)
-                  if (_isVisible && !showEpisodeList && !_isLocked)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => ref
-                              .read(playerControllerProvider.notifier)
-                              .toggleEpisodeList(),
-                          borderRadius: const BorderRadius.horizontal(
-                            left: Radius.circular(30),
-                          ),
-                          child: Container(
-                            height: 80,
-                            width: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              borderRadius: const BorderRadius.horizontal(
-                                left: Radius.circular(30),
-                              ),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.1),
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.chevron_left_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                  if (ref
-                          .read(playerControllerProvider.notifier)
-                          .multimediaItem !=
-                      null)
-                    PlayerEpisodeOverlay(
-                      item: ref
-                          .read(playerControllerProvider.notifier)
-                          .multimediaItem!,
-                      isVisible: showEpisodeList && !_isLocked,
-                      isTv: _isTv,
-                      onDismiss: () => ref
-                          .read(playerControllerProvider.notifier)
-                          .toggleEpisodeList(),
-                    ),
-                ],
+                if (isSeries &&
+                    ref
+                            .read(playerControllerProvider.notifier)
+                            .multimediaItem !=
+                        null)
+                  PlayerEpisodeOverlay(
+                    item: ref
+                        .read(playerControllerProvider.notifier)
+                        .multimediaItem!,
+                    isVisible: showEpisodeList && !_isLocked,
+                    isTv: _isTv,
+                    onDismiss: () => ref
+                        .read(playerControllerProvider.notifier)
+                        .toggleEpisodeList(),
+                  ),
               ],
             ),
           ),
@@ -1231,6 +1249,15 @@ class SkyStreamPlayerControlsState
     ];
 
     final trailing = <Widget>[
+      if (isSeries)
+        PlayerIconButton(
+          icon: Icons.playlist_play_rounded,
+          tooltip: l10n.episodes,
+          onPressed: () => ref
+              .read(playerControllerProvider.notifier)
+              .toggleEpisodeList(),
+          isTv: _isTv,
+        ),
       PlayerIconButton(
         icon: Icons.aspect_ratio_rounded,
         tooltip: l10n.resize,
@@ -1277,6 +1304,7 @@ class SkyStreamPlayerControlsState
                     subtitle: subtitle,
                     onBack: widget.onBackPointer ?? () => context.pop(),
                     isTv: _isTv,
+                    backFocusNode: _backFocusNode,
                   ),
                 ),
                 // Center zone: touch keeps the big play/seek cluster; TV and
@@ -1306,6 +1334,32 @@ class SkyStreamPlayerControlsState
                       videoViewController: widget.videoViewController,
                       onSeekStart: _cancelHideTimer,
                       isTv: _isTv,
+                      focusNode: _scrubFocusNode,
+                      onArrowUp: () {
+                        final resumePromptPosition = ref.read(
+                          playerControllerProvider.select((s) => s.resumePromptPosition),
+                        );
+                        final resumePromptPercentage = ref.read(
+                          playerControllerProvider.select((s) => s.resumePromptPercentage),
+                        );
+                        final showNextEpOverlay = ref.read(
+                          playerControllerProvider.select((s) => s.showNextEpisodeOverlay),
+                        );
+                        final nextEpTitle = ref.read(
+                          playerControllerProvider.select((s) => s.nextEpisodeTitle),
+                        );
+
+                        if (resumePromptPosition != null ||
+                            resumePromptPercentage != null) {
+                          _resumeFocusNode.requestFocus();
+                        } else if (showNextEpOverlay && nextEpTitle != null) {
+                          _nextEpFocusNode.requestFocus();
+                        } else if (_isSkipActive) {
+                          _skipFocusNode.requestFocus();
+                        } else {
+                          _backFocusNode.requestFocus();
+                        }
+                      },
                     ),
                     leading: leading,
                     actions: actions,

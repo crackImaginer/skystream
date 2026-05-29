@@ -16,6 +16,9 @@ class CustomSlider extends StatefulWidget {
   final ValueChanged<double>? onChangeEnd;
   final Color? activeColor;
   final Color? inactiveColor;
+  final FocusNode? focusNode;
+  final VoidCallback? onArrowUp;
+  final VoidCallback? onArrowDown;
 
   const CustomSlider({
     super.key,
@@ -29,6 +32,9 @@ class CustomSlider extends StatefulWidget {
     this.onChangeEnd,
     this.activeColor,
     this.inactiveColor,
+    this.focusNode,
+    this.onArrowUp,
+    this.onArrowDown,
   });
 
   @override
@@ -36,23 +42,29 @@ class CustomSlider extends StatefulWidget {
 }
 
 class _CustomSliderState extends State<CustomSlider> {
-  final FocusNode _focusNode = FocusNode();
+  late final FocusNode _focusNode;
   bool _isFocused = false;
   bool _isDragging = false;
   Timer? _seekCommitTimer;
+  late final VoidCallback _focusListener;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() {
+    _focusNode = widget.focusNode ?? FocusNode();
+    _focusListener = () {
       if (mounted) setState(() => _isFocused = _focusNode.hasFocus);
-    });
+    };
+    _focusNode.addListener(_focusListener);
   }
 
   @override
   void dispose() {
     _seekCommitTimer?.cancel();
-    _focusNode.dispose();
+    _focusNode.removeListener(_focusListener);
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -109,13 +121,27 @@ class _CustomSliderState extends State<CustomSlider> {
         // anchored to the slider and not to whatever happens to be the
         // enclosing FocusScope.
         if (logicalKey == LogicalKeyboardKey.arrowUp) {
-          _focusNode.focusInDirection(TraversalDirection.up);
+          if (widget.onArrowUp != null) {
+            widget.onArrowUp!();
+            return KeyEventResult.handled;
+          }
+          final success = _focusNode.focusInDirection(TraversalDirection.up);
+          if (!success) {
+            _focusNode.previousFocus();
+          }
           return KeyEventResult.handled;
         }
 
         // Down arrow: move focus down
         if (logicalKey == LogicalKeyboardKey.arrowDown) {
-          _focusNode.focusInDirection(TraversalDirection.down);
+          if (widget.onArrowDown != null) {
+            widget.onArrowDown!();
+            return KeyEventResult.handled;
+          }
+          final success = _focusNode.focusInDirection(TraversalDirection.down);
+          if (!success) {
+            _focusNode.nextFocus();
+          }
           return KeyEventResult.handled;
         }
 
@@ -124,10 +150,7 @@ class _CustomSliderState extends State<CustomSlider> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          border:
-              (_isFocused &&
-                  FocusManager.instance.highlightMode ==
-                      FocusHighlightMode.traditional)
+          border: _isFocused
               ? Border.all(
                   color: Theme.of(context).colorScheme.primary,
                   width: 2,
@@ -149,11 +172,7 @@ class _CustomSliderState extends State<CustomSlider> {
             onChangeEnd: widget.onChangeEnd,
             activeColor:
                 widget.activeColor ??
-                ((_isFocused &&
-                        FocusManager.instance.highlightMode ==
-                            FocusHighlightMode.traditional)
-                    ? Theme.of(context).colorScheme.primary
-                    : null),
+                (_isFocused ? Theme.of(context).colorScheme.primary : null),
             inactiveColor: widget.inactiveColor,
           ),
         ),
@@ -334,10 +353,7 @@ class _CustomButtonState extends State<CustomButton> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isTraditional =
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    final showHighlight =
-        widget.showFocusHighlight && _isFocused && isTraditional;
+    final showHighlight = widget.showFocusHighlight && _isFocused;
 
     // Wrap in an AnimatedScale + Container so focused buttons get a clear
     // "elevation" cue regardless of their fill color. Useful on TV where blue

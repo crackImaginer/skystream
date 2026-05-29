@@ -110,73 +110,79 @@ class _PlayerEpisodeOverlayState extends ConsumerState<PlayerEpisodeOverlay> {
     final isMobile = size.width < 600;
     final panelWidth = isMobile ? size.width * 0.85 : 360.0;
 
-    return Stack(
-      children: [
-        // Full screen dismissal background
-        if (widget.isVisible)
-          GestureDetector(
-            onTap: widget.onDismiss,
+    return ExcludeFocus(
+      excluding: !widget.isVisible,
+      child: Stack(
+        children: [
+          // Full screen dismissal background
+          if (widget.isVisible)
+            GestureDetector(
+              onTap: widget.onDismiss,
+              child: Container(
+                width: size.width,
+                height: size.height,
+                color: Colors.transparent,
+              ),
+            ),
+  
+          // Side Panel (Animated from right)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.fastOutSlowIn,
+            right: widget.isVisible ? 0 : -panelWidth - 50,
+            top: 0,
+            bottom: 0,
             child: Container(
-              width: size.width,
-              height: size.height,
-              color: Colors.transparent,
-            ),
-          ),
-
-        // Side Panel (Animated from right)
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.fastOutSlowIn,
-          right: widget.isVisible ? 0 : -panelWidth - 50,
-          top: 0,
-          bottom: 0,
-          child: Container(
-            width: panelWidth,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.85),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 30,
-                  offset: const Offset(-10, 0),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(context),
-                    const Divider(color: Colors.white12, height: 1),
-                    Expanded(
-                      child:
-                          widget.item.episodes == null ||
-                              widget.item.episodes!.isEmpty
-                          ? Center(
-                              child: Text(
-                                AppLocalizations.of(context)!.noEpisodesFound,
-                                style: const TextStyle(color: Colors.white54),
-                              ),
-                            )
-                          : _buildEpisodeList(context),
-                    ),
-                  ],
+              width: panelWidth,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.85),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 30,
+                    offset: const Offset(-10, 0),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(context),
+                      const Divider(color: Colors.white12, height: 1),
+                      Expanded(
+                        child:
+                            widget.item.episodes == null ||
+                                widget.item.episodes!.isEmpty
+                            ? Center(
+                                child: Text(
+                                  AppLocalizations.of(context)!.noEpisodesFound,
+                                  style: const TextStyle(color: Colors.white54),
+                                ),
+                              )
+                            : _buildEpisodeList(context),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildHeader(BuildContext context) {
+    final topPadding = widget.isTv
+        ? 48.0
+        : MediaQuery.viewPaddingOf(context).top + 20;
     return Container(
       padding: EdgeInsets.only(
-        top: MediaQuery.viewPaddingOf(context).top + 20,
+        top: topPadding,
         left: 20,
         right: 12,
         bottom: 12,
@@ -264,7 +270,7 @@ class _PlayerEpisodeOverlayState extends ConsumerState<PlayerEpisodeOverlay> {
     return FocusTraversalGroup(
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.only(top: 12, bottom: widget.isTv ? 48.0 : 12.0),
         itemCount: episodes.length,
         itemBuilder: (context, index) {
           final ep = episodes[index];
@@ -320,114 +326,141 @@ class _EpisodeItem extends StatefulWidget {
 
 class _EpisodeItemState extends State<_EpisodeItem> {
   bool _isHovered = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
+    final showHighlight = _isHovered || _isFocused;
     return FocusableActionDetector(
       // On TV, seed focus on the currently-playing episode so the panel opens
       // with a live D-pad anchor.
       autofocus: widget.isTv && widget.isPlaying,
       onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+      onShowFocusHighlight: (v) => setState(() => _isFocused = v),
       child: InkWell(
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: widget.isPlaying
-              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
-              : (_isHovered
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.transparent),
-          child: Row(
-            children: [
-              // Thumbnail with progress
-              Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Container(
-                    width: 120,
-                    height: 68,
-                    decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(8),
-                      image: widget.episode.posterUrl != null
-                          ? DecorationImage(
-                              image: NetworkImage(widget.episode.posterUrl!),
-                              fit: BoxFit.cover,
+        child: AnimatedScale(
+          scale: _isFocused ? 1.04 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: widget.isPlaying
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
+                  : (showHighlight
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.transparent),
+              border: Border.all(
+                color: _isFocused
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+                width: 2,
+              ),
+              boxShadow: _isFocused
+                  ? [
+                      BoxShadow(
+                        color: Theme.of(context).colorScheme.primary.withValues(
+                          alpha: 0.35,
+                        ),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                // Thumbnail with progress
+                Stack(
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 68,
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                        image: widget.episode.posterUrl != null
+                            ? DecorationImage(
+                                image: NetworkImage(widget.episode.posterUrl!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: widget.isPlaying
+                          ? Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
                             )
                           : null,
                     ),
-                    child: widget.isPlaying
-                        ? Center(
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                          )
-                        : null,
-                  ),
-                  if (widget.progress > 0 && widget.progress < 0.85)
-                    Container(
-                      height: 3,
-                      width: 120,
-                      decoration: const BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(8),
+                    if (widget.progress > 0 && widget.progress < 0.85)
+                      Container(
+                        height: 3,
+                        width: 120,
+                        decoration: const BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(8),
+                          ),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: widget.progress,
+                          child: Container(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
-                      child: FractionallySizedBox(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: widget.progress,
-                        child: Container(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              // Meta
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "S${widget.episode.season} : E${widget.episode.episode}",
-                      style: TextStyle(
-                        color: widget.isPlaying
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.white54,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.episode.name,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: widget.isPlaying
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                // Meta
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "S${widget.episode.season} : E${widget.episode.episode}",
+                        style: TextStyle(
+                          color: widget.isPlaying
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.white54,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.episode.name,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: widget.isPlaying
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

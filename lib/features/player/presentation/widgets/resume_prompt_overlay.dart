@@ -13,6 +13,7 @@ class ResumePromptOverlay extends StatelessWidget {
   final VoidCallback onResume;
   final VoidCallback onStartOver;
   final bool isTv;
+  final FocusNode? focusNode;
 
   const ResumePromptOverlay({
     super.key,
@@ -21,6 +22,7 @@ class ResumePromptOverlay extends StatelessWidget {
     required this.onResume,
     required this.onStartOver,
     this.isTv = false,
+    this.focusNode,
   });
 
   String _formatDuration(int ms) {
@@ -44,7 +46,9 @@ class ResumePromptOverlay extends StatelessWidget {
       subtitle = "Synced progress: ${percentage!.toStringAsFixed(0)}%";
     }
     return PlayerPromptPlacement(
+      isTv: isTv,
       child: CountdownFillButton(
+        focusNode: focusNode,
         label: l10n.resumeNow,
         subtitle: subtitle,
         duration: const Duration(seconds: 8),
@@ -65,6 +69,7 @@ class CountdownFillButton extends StatefulWidget {
   final bool showDismiss;
   final VoidCallback? onDismiss;
   final bool isTv;
+  final FocusNode? focusNode;
 
   const CountdownFillButton({
     super.key,
@@ -76,6 +81,7 @@ class CountdownFillButton extends StatefulWidget {
     this.showDismiss = false,
     this.onDismiss,
     this.isTv = false,
+    this.focusNode,
   });
 
   @override
@@ -87,10 +93,12 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
   late final AnimationController _controller;
   Timer? _timer;
   bool _completed = false;
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
     _controller = AnimationController(vsync: this, duration: widget.duration)
       ..forward();
     _timer = Timer(widget.duration, _handleTimeout);
@@ -100,6 +108,9 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
   void dispose() {
     _timer?.cancel();
     _controller.dispose();
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -135,6 +146,7 @@ class _CountdownFillButtonState extends State<CountdownFillButton>
 
     return FocusTraversalGroup(
       child: Focus(
+        focusNode: _focusNode,
         autofocus: widget.isTv,
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;

@@ -20,6 +20,10 @@ class SkipSegmentOverlay extends ConsumerStatefulWidget {
   final vv.VideoController? videoViewController;
   final List<SkipSegment> skipSegments;
   final bool isTv;
+  final bool controlsVisible;
+  final VoidCallback? onFocusReturned;
+  final FocusNode? focusNode;
+  final ValueChanged<bool>? onActiveSegmentChanged;
 
   const SkipSegmentOverlay({
     super.key,
@@ -27,6 +31,10 @@ class SkipSegmentOverlay extends ConsumerStatefulWidget {
     required this.skipSegments,
     this.videoViewController,
     this.isTv = false,
+    this.controlsVisible = false,
+    this.onFocusReturned,
+    this.focusNode,
+    this.onActiveSegmentChanged,
   });
 
   @override
@@ -37,7 +45,7 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
   bool _isSkipping = false;
   Timer? _skipDebounceTimer;
 
-  final FocusNode _focusNode = FocusNode();
+  late final FocusNode _focusNode;
 
   SkipSegment? _activeSegment;
   StreamSubscription<Duration>? _mkPositionSub;
@@ -45,6 +53,7 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _setupListeners();
     });
@@ -77,7 +86,12 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
   @override
   void dispose() {
     _skipDebounceTimer?.cancel();
-    _focusNode.dispose();
+    if (_focusNode.hasFocus) {
+      widget.onFocusReturned?.call();
+    }
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
+    }
     widget.videoViewController?.position.removeListener(_onVvPositionChanged);
     _mkPositionSub?.cancel();
     super.dispose();
@@ -108,9 +122,13 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
     }
 
     if (newSegment != _activeSegment) {
+      if (newSegment == null && _focusNode.hasFocus) {
+        widget.onFocusReturned?.call();
+      }
       setState(() {
         _activeSegment = newSegment;
       });
+      widget.onActiveSegmentChanged?.call(newSegment != null);
     }
   }
 
@@ -150,6 +168,7 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
     final isCompact = size.shortestSide < 600;
 
     return PlayerPromptPlacement(
+      isTv: widget.isTv,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
@@ -176,6 +195,7 @@ class _SkipSegmentOverlayState extends ConsumerState<SkipSegmentOverlay> {
                 focusNode: _focusNode,
                 isTv: widget.isTv,
                 isCompact: isCompact,
+                controlsVisible: widget.controlsVisible,
                 onPressed: () => _handleSkip(activeSegment),
               )
             : const SizedBox.shrink(key: ValueKey('skip_empty')),
@@ -190,6 +210,7 @@ class _SkipPill extends StatelessWidget {
   final FocusNode focusNode;
   final bool isTv;
   final bool isCompact;
+  final bool controlsVisible;
   final VoidCallback onPressed;
 
   const _SkipPill({
@@ -198,6 +219,7 @@ class _SkipPill extends StatelessWidget {
     required this.focusNode,
     required this.isTv,
     required this.isCompact,
+    required this.controlsVisible,
     required this.onPressed,
   });
 
@@ -209,7 +231,8 @@ class _SkipPill extends StatelessWidget {
     return FocusTraversalGroup(
       child: Focus(
         focusNode: focusNode,
-        autofocus: isTv,
+        autofocus: isTv && controlsVisible,
+        canRequestFocus: controlsVisible,
         onKeyEvent: (node, event) {
           if (event is! KeyDownEvent) return KeyEventResult.ignored;
           if (event.logicalKey == LogicalKeyboardKey.select ||
