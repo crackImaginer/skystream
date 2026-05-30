@@ -611,7 +611,7 @@ class AppLocalizationsAs extends AppLocalizations {
   String get noReposFound => 'কোনো ৰিপোজিটৰী বা প্লাগইন পোৱা নগ\'ল';
 
   @override
-  String get downloadAllProviders => 'সকলো উপলব্ধ প্ৰদানকাৰী ডাউনলোড কৰক';
+  String get downloadAllProviders => 'সকলো ডাউনলোড কৰক';
 
   @override
   String get removeRepository => 'ৰিপোজিটৰী মচক';

@@ -611,7 +611,7 @@ class AppLocalizationsGu extends AppLocalizations {
   String get noReposFound => 'કોઈ રિપોઝિટરી અથવા પ્લગઈન્સ મળ્યા નથી';
 
   @override
-  String get downloadAllProviders => 'બધા ઉપલબ્ધ પ્રદાતાઓ ડાઉનલોડ કરો';
+  String get downloadAllProviders => 'બધું ડાઉનલોડ કરો';
 
   @override
   String get removeRepository => 'રિપોઝિટરી દૂર કરો';

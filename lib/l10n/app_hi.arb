@@ -183,7 +183,7 @@
   "failedToDownloadSubtitle": "उपशीर्षक डाउनलोड करने में विफल।",
   "failedToLoadSubtitles": "उपशीर्षक लोड करने में विफल। कृपया पुन: प्रयास करें।",
   "noReposFound": "कोई रिपॉजिटरी या प्लगिन नहीं मिला",
-  "downloadAllProviders": "सभी उपलब्ध प्रदाता डाउनलोड करें",
+  "downloadAllProviders": "सभी डाउनलोड करें",
   "removeRepository": "रिपॉजिटरी हटाएँ",
   "addRepo": "रिपॉजिटरी जोड़ें",
   "extensionsNotInRepos": "रिपॉजिटरी में नहीं एक्सटेंशन",

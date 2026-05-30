@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "سب ٹائٹل ڈاؤن لوڈ کرنے میں ناکام رہا۔",
   "failedToLoadSubtitles": "سب ٹائٹلز لوڈ کرنے میں ناکام رہا۔ براہ کرم دوبارہ کوشش کریں۔",
   "noReposFound": "کوئی ریپوزٹریز یا پلگ ان نہیں ملے",
-  "downloadAllProviders": "تمام دستیاب فراہم کنندگان ڈاؤن لوڈ کریں",
+  "downloadAllProviders": "سب ڈاؤن لوڈ کریں",
   "removeRepository": "ریپوزٹری ہٹائیں",
   "addRepo": "ریپو شامل کریں",
   "extensionsNotInRepos": "ریپوزٹریز میں نہیں ایکٹینشنز",

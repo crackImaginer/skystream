@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Nepodařilo se stáhnout titulky.",
   "failedToLoadSubtitles": "Nepodařilo se načíst titulky. Zkuste to znovu.",
   "noReposFound": "Nebyla nalezena žádná úložiště",
-  "downloadAllProviders": "Stáhnout všechny poskytovatele",
+  "downloadAllProviders": "Stáhnout vše",
   "removeRepository": "Odstranit úložiště",
   "addRepo": "Přidat úložiště",
   "extensionsNotInRepos": "Rozšíření mimo úložiště",

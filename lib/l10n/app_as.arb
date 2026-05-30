@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "চাবটাইটল ডাউনলোড কৰাত ব্যৰ্থ হ'ল।",
   "failedToLoadSubtitles": "চাবটাইটল লোড কৰাত ব্যৰ্থ হ'ল। অনুগ্ৰহ কৰি পুনৰ চেষ্টা কৰক।",
   "noReposFound": "কোনো ৰিপোজিটৰী বা প্লাগইন পোৱা নগ'ল",
-  "downloadAllProviders": "সকলো উপলব্ধ প্ৰদানকাৰী ডাউনলোড কৰক",
+  "downloadAllProviders": "সকলো ডাউনলোড কৰক",
   "removeRepository": "ৰিপোজিটৰী মচক",
   "addRepo": "ৰিপো যোগ কৰক",
   "extensionsNotInRepos": "ৰিপোজিটৰীত নথকা এক্সটেনচন",

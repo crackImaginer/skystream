@@ -252,7 +252,7 @@
   "failedToDownloadSubtitle": "Failed to download subtitle.",
   "failedToLoadSubtitles": "Failed to load subtitles. Please try again.",
   "noReposFound": "No repositories or plugins found",
-  "downloadAllProviders": "Download All available providers",
+  "downloadAllProviders": "Download All",
   "removeRepository": "Remove Repository",
   "addRepo": "Add Repo",
   "extensionsNotInRepos": "Extensions Not in Repositories",

@@ -618,8 +618,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get noReposFound => 'റിപ്പോസിറ്ററികളോ പ്ലഗിനുകളോ കണ്ടെത്തിയില്ല';
 
   @override
-  String get downloadAllProviders =>
-      'ലഭ്യമായ എല്ലാ ദാതാക്കളെയും ഡൗൺലോഡ് ചെയ്യുക';
+  String get downloadAllProviders => 'എല്ലാം ഡൗൺലോഡ് ചെയ്യുക';
 
   @override
   String get removeRepository => 'റിപ്പോസിറ്ററി നീക്കം ചെയ്യുക';

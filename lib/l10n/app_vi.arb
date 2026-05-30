@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Không thể tải phụ đề.",
   "failedToLoadSubtitles": "Không thể tải phụ đề. Vui lòng thử lại.",
   "noReposFound": "Không tìm thấy kho lưu trữ hoặc plugin nào",
-  "downloadAllProviders": "Tải xuống tất cả các nguồn có sẵn",
+  "downloadAllProviders": "Tải xuống tất cả",
   "removeRepository": "Xóa kho lưu trữ",
   "addRepo": "Thêm kho lưu trữ",
   "extensionsNotInRepos": "Tiện ích không nằm trong kho",

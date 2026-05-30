@@ -611,7 +611,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get noReposFound => 'Nenhum repositório ou plugin encontrado';
 
   @override
-  String get downloadAllProviders => 'Transferir todos os fornecedores';
+  String get downloadAllProviders => 'Transferir tudo';
 
   @override
   String get removeRepository => 'Remover Repositório';
@@ -1837,7 +1837,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get noReposFound => 'Nenhum repositório ou plugin encontrado';
 
   @override
-  String get downloadAllProviders => 'Baixar todos os provedores';
+  String get downloadAllProviders => 'Baixar todos';
 
   @override
   String get removeRepository => 'Remover Repositório';

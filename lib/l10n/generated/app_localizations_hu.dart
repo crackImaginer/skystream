@@ -614,7 +614,7 @@ class AppLocalizationsHu extends AppLocalizations {
   String get noReposFound => 'Nem találhatók tárolók vagy bővítmények';
 
   @override
-  String get downloadAllProviders => 'Összes elérhető szolgáltató letöltése';
+  String get downloadAllProviders => 'Összes letöltése';
 
   @override
   String get removeRepository => 'Tároló eltávolítása';

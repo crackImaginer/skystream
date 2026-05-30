@@ -1318,7 +1318,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadAllProviders.
   ///
   /// In en, this message translates to:
-  /// **'Download All available providers'**
+  /// **'Download All'**
   String get downloadAllProviders;
 
   /// No description provided for @removeRepository.

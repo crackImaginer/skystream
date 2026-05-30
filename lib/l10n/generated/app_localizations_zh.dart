@@ -596,7 +596,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noReposFound => '未找到存储库或插件';
 
   @override
-  String get downloadAllProviders => '下载所有可用供应商';
+  String get downloadAllProviders => '下载全部';
 
   @override
   String get removeRepository => '移除存储库';
@@ -1790,7 +1790,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get noReposFound => '找不到存儲庫或外掛程式';
 
   @override
-  String get downloadAllProviders => '下載所有可用供應商';
+  String get downloadAllProviders => '下載全部';
 
   @override
   String get removeRepository => '移除存儲庫';

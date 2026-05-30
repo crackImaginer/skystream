@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Sikertelen felirat letöltés.",
   "failedToLoadSubtitles": "Sikertelen felirat betöltés. Próbálja újra.",
   "noReposFound": "Nem találhatók tárolók vagy bővítmények",
-  "downloadAllProviders": "Összes elérhető szolgáltató letöltése",
+  "downloadAllProviders": "Összes letöltése",
   "removeRepository": "Tároló eltávolítása",
   "addRepo": "Tároló hozzáadása",
   "extensionsNotInRepos": "Nem tárolóban lévő bővítmények",

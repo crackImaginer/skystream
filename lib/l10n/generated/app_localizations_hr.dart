@@ -607,7 +607,7 @@ class AppLocalizationsHr extends AppLocalizations {
   String get noReposFound => 'Nisu pronađena skladišta';
 
   @override
-  String get downloadAllProviders => 'Preuzmi sve pružatelje';
+  String get downloadAllProviders => 'Preuzmi sve';
 
   @override
   String get removeRepository => 'Ukloni skladište';

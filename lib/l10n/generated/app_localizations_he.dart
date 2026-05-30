@@ -602,7 +602,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get noReposFound => 'לא נמצאו מאגרים או פלאגינים';
 
   @override
-  String get downloadAllProviders => 'הורד את כל הספקים הזמינים';
+  String get downloadAllProviders => 'הורד הכל';
 
   @override
   String get removeRepository => 'הסר מאגר';

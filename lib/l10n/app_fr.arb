@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Échec du téléchargement du sous-titre.",
   "failedToLoadSubtitles": "Échec du chargement des sous-titres. Veuillez réessayer.",
   "noReposFound": "Aucun dépôt ou plugin trouvé",
-  "downloadAllProviders": "Télécharger tous les fournisseurs disponibles",
+  "downloadAllProviders": "Télécharger tout",
   "removeRepository": "Supprimer le dépôt",
   "addRepo": "Ajouter un dépôt",
   "extensionsNotInRepos": "Extensions hors dépôts",

@@ -613,7 +613,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noReposFound => 'Репозитории или плагины не найдены';
 
   @override
-  String get downloadAllProviders => 'Скачать всех доступных провайдеров';
+  String get downloadAllProviders => 'Скачать все';
 
   @override
   String get removeRepository => 'Удалить репозиторий';

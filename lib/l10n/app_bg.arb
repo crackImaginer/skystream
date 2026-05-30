@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Грешка при изтегляне.",
   "failedToLoadSubtitles": "Грешка при зареждане.",
   "noReposFound": "Няма намерени хранилища",
-  "downloadAllProviders": "Изтегли всички налични",
+  "downloadAllProviders": "Изтегли всички",
   "removeRepository": "Премахни хранилище",
   "addRepo": "Добави хранилище",
   "extensionsNotInRepos": "Разширения извън хранилищата",

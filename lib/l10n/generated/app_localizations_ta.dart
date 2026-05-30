@@ -619,8 +619,7 @@ class AppLocalizationsTa extends AppLocalizations {
       'ரிப்போசிட்டரிகள் அல்லது செருகுநிரல்கள் எதுவும் இல்லை';
 
   @override
-  String get downloadAllProviders =>
-      'கிடைக்கக்கூடிய அனைத்து வழங்குநர்களையும் பதிவிறக்கு';
+  String get downloadAllProviders => 'அனைத்தையும் பதிவிறக்கு';
 
   @override
   String get removeRepository => 'ரிப்போசிட்டரியை நீக்கு';

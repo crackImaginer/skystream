@@ -608,7 +608,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get noReposFound => 'Няма намерени хранилища';
 
   @override
-  String get downloadAllProviders => 'Изтегли всички налични';
+  String get downloadAllProviders => 'Изтегли всички';
 
   @override
   String get removeRepository => 'Премахни хранилище';

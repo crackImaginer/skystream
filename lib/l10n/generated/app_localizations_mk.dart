@@ -611,7 +611,7 @@ class AppLocalizationsMk extends AppLocalizations {
   String get noReposFound => 'Не се пронајдени репозиториуми или приклучоци';
 
   @override
-  String get downloadAllProviders => 'Преземи ги сите достапни провајдери';
+  String get downloadAllProviders => 'Преземи ги сите';
 
   @override
   String get removeRepository => 'Отстрани репозиториум';

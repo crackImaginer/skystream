@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "ਸਬਟਾਈਟਲ ਡਾਊਨਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫਲ।",
   "failedToLoadSubtitles": "ਸਬਟਾਈਟਲ ਲੋਡ ਕਰਨ ਵਿੱਚ ਅਸਫਲ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
   "noReposFound": "ਕੋਈ ਰਿਪੋਜ਼ਟਰੀ ਜਾਂ ਪਲੱਗਇਨ ਨਹੀਂ ਮਿਲਿਆ",
-  "downloadAllProviders": "ਸਾਰੇ ਉਪਲਬਧ ਪ੍ਰਦਾਤਾ ਡਾਊਨਲੋਡ ਕਰੋ",
+  "downloadAllProviders": "ਸਭ ਡਾਊਨਲੋਡ ਕਰੋ",
   "removeRepository": "ਰਿਪੋਜ਼ਟਰੀ ਹਟਾਓ",
   "addRepo": "ਰਿਪੋ ਸ਼ਾਮਲ ਕਰੋ",
   "extensionsNotInRepos": "ਰਿਪੋਜ਼ਟਰੀਆਂ ਵਿੱਚ ਨਾ ਹੋਣ ਵਾਲੀਆਂ ਐਕਸਟੈਂਸ਼ਨਾਂ",

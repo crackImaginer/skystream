@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Neizdevās lejupielādēt subtitrus.",
   "failedToLoadSubtitles": "Neizdevās ielādēt subtitrus. Mēģiniet vēlreiz.",
   "noReposFound": "Netika atrasti krātuves vai spraudņi",
-  "downloadAllProviders": "Lejupielādēt visus pieejamos sniedzējus",
+  "downloadAllProviders": "Lejupielādēt visu",
   "removeRepository": "Noņemt krātuvi",
   "addRepo": "Pievienot krātuvi",
   "extensionsNotInRepos": "Paplašinājumi ārpus krātuvēm",

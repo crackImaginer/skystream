@@ -613,7 +613,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get noReposFound => 'Inga källor eller insticksfiler hittades';
 
   @override
-  String get downloadAllProviders => 'Ladda ner alla tillgängliga leverantörer';
+  String get downloadAllProviders => 'Ladda ner alla';
 
   @override
   String get removeRepository => 'Ta bort källa';

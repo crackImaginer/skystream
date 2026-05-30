@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Neuspjelo preuzimanje titlova.",
   "failedToLoadSubtitles": "Neuspjelo učitavanje titlova.",
   "noReposFound": "Nisu pronađena skladišta",
-  "downloadAllProviders": "Preuzmi sve pružatelje",
+  "downloadAllProviders": "Preuzmi sve",
   "removeRepository": "Ukloni skladište",
   "addRepo": "Dodaj skladište",
   "extensionsNotInRepos": "Proširenja izvan skladišta",

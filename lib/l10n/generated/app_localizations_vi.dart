@@ -605,7 +605,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get noReposFound => 'Không tìm thấy kho lưu trữ hoặc plugin nào';
 
   @override
-  String get downloadAllProviders => 'Tải xuống tất cả các nguồn có sẵn';
+  String get downloadAllProviders => 'Tải xuống tất cả';
 
   @override
   String get removeRepository => 'Xóa kho lưu trữ';

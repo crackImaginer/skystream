@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Неуспешно преземање титл.",
   "failedToLoadSubtitles": "Неуспешно вчитување титлови. Обидете се повторно.",
   "noReposFound": "Не се пронајдени репозиториуми или приклучоци",
-  "downloadAllProviders": "Преземи ги сите достапни провајдери",
+  "downloadAllProviders": "Преземи ги сите",
   "removeRepository": "Отстрани репозиториум",
   "addRepo": "Додај репозиториум",
   "extensionsNotInRepos": "Екстензии надвор од репозиториуми",

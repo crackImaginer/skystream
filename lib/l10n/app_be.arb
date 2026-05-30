@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Не ўдалося загрузіць субтытры.",
   "failedToLoadSubtitles": "Не ўдалося загрузіць субтытры. Паспрабуйце зноў.",
   "noReposFound": "Рэпазіторыі або плагіны не знойдзены",
-  "downloadAllProviders": "Спампаваць усе даступныя правайдэры",
+  "downloadAllProviders": "Спампаваць усё",
   "removeRepository": "Выдаліць рэпазіторый",
   "addRepo": "Дадаць рэпазіторый",
   "extensionsNotInRepos": "Пашырэнні не з рэпазіторыяў",

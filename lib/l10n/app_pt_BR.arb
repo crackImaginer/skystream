@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Falha ao baixar legenda.",
   "failedToLoadSubtitles": "Falha ao carregar legendas. Tente novamente.",
   "noReposFound": "Nenhum repositório ou plugin encontrado",
-  "downloadAllProviders": "Baixar todos os provedores",
+  "downloadAllProviders": "Baixar todos",
   "removeRepository": "Remover Repositório",
   "addRepo": "Adicionar Repo",
   "extensionsNotInRepos": "Extensões Fora dos Repositórios",

@@ -615,7 +615,7 @@ class AppLocalizationsEl extends AppLocalizations {
   String get noReposFound => 'Δεν βρέθηκαν αποθετήρια ή πρόσθετα';
 
   @override
-  String get downloadAllProviders => 'Λήψη όλων των διαθέσιμων παρόχων';
+  String get downloadAllProviders => 'Λήψη όλων';
 
   @override
   String get removeRepository => 'Αφαίρεση αποθετηρίου';

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "下载字幕失败。",
   "failedToLoadSubtitles": "加载字幕失败。请重试。",
   "noReposFound": "未找到存储库或插件",
-  "downloadAllProviders": "下载所有可用供应商",
+  "downloadAllProviders": "下载全部",
   "removeRepository": "移除存储库",
   "addRepo": "添加存储库",
   "extensionsNotInRepos": "不在存储库中的扩展",

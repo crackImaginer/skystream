@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "فشل تحميل الترجمة.",
   "failedToLoadSubtitles": "فشل عرض الترجمة.",
   "noReposFound": "ما في مستودعات",
-  "downloadAllProviders": "تحميل كل المتاحين",
+  "downloadAllProviders": "تحميل الكل",
   "removeRepository": "حذف المستودع",
   "addRepo": "إضافة مستودع",
   "extensionsNotInRepos": "إضافات مو بالمستودعات",

@@ -611,7 +611,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noReposFound => 'لم يتم العثور على مستودعات أو إضافات';
 
   @override
-  String get downloadAllProviders => 'تنزيل جميع المزودين المتاحين';
+  String get downloadAllProviders => 'تنزيل الكل';
 
   @override
   String get removeRepository => 'إزالة المستودع';
@@ -1829,7 +1829,7 @@ class AppLocalizationsArApc extends AppLocalizationsAr {
   String get noReposFound => 'ما في مستودعات';
 
   @override
-  String get downloadAllProviders => 'تحميل كل المتاحين';
+  String get downloadAllProviders => 'تحميل الكل';
 
   @override
   String get removeRepository => 'حذف المستودع';

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Błąd pobierania napisów.",
   "failedToLoadSubtitles": "Błąd wczytywania napisów.",
   "noReposFound": "Nie znaleziono repozytoriów",
-  "downloadAllProviders": "Pobierz wszystkich dostępnych",
+  "downloadAllProviders": "Pobierz wszystko",
   "removeRepository": "Usuń repozytorium",
   "addRepo": "Dodaj repozytorium",
   "extensionsNotInRepos": "Rozszerzenia spoza repo",

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "자막 다운로드 실패.",
   "failedToLoadSubtitles": "자막 불러오기 실패. 다시 시도해 주세요.",
   "noReposFound": "저장소나 플러그인을 찾을 수 없습니다",
-  "downloadAllProviders": "이용 가능한 모든 제공자 다운로드",
+  "downloadAllProviders": "모두 다운로드",
   "removeRepository": "저장소 제거",
   "addRepo": "저장소 추가",
   "extensionsNotInRepos": "저장소 외부의 확장 프로그램",

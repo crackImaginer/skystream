@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Ondertitel downloaden mislukt.",
   "failedToLoadSubtitles": "Ondertitels laden mislukt. Probeer het opnieuw.",
   "noReposFound": "Geen repository's of plug-ins gevonden",
-  "downloadAllProviders": "Alle beschikbare providers downloaden",
+  "downloadAllProviders": "Alles downloaden",
   "removeRepository": "Repository verwijderen",
   "addRepo": "Repo toevoegen",
   "extensionsNotInRepos": "Extensies niet in repository's",

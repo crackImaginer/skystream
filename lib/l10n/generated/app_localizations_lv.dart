@@ -615,7 +615,7 @@ class AppLocalizationsLv extends AppLocalizations {
   String get noReposFound => 'Netika atrasti krātuves vai spraudņi';
 
   @override
-  String get downloadAllProviders => 'Lejupielādēt visus pieejamos sniedzējus';
+  String get downloadAllProviders => 'Lejupielādēt visu';
 
   @override
   String get removeRepository => 'Noņemt krātuvi';

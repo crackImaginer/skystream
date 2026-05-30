@@ -617,8 +617,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get noReposFound => 'రిపోజిటరీలు లేదా ప్లగిన్లు ఏమీ కనుగొనబడలేదు';
 
   @override
-  String get downloadAllProviders =>
-      'అందుబాటులో ఉన్న అన్ని ప్రొవైడర్లను డౌన్‌లోడ్ చేయండి';
+  String get downloadAllProviders => 'అన్నీ డౌన్‌లోడ్ చేయండి';
 
   @override
   String get removeRepository => 'రిపోజిటరీని తొలగించండి';

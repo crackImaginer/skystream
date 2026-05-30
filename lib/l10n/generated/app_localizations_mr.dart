@@ -610,7 +610,7 @@ class AppLocalizationsMr extends AppLocalizations {
   String get noReposFound => 'कोणतेही रिपॉझिटरीज किंवा प्लगइन्स आढळले नाहीत';
 
   @override
-  String get downloadAllProviders => 'सर्व उपलब्ध प्रदाते डाउनलोड करा';
+  String get downloadAllProviders => 'सर्व डाउनलोड करा';
 
   @override
   String get removeRepository => 'रिपॉझिटरी हटवा';

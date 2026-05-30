@@ -609,7 +609,7 @@ class AppLocalizationsBe extends AppLocalizations {
   String get noReposFound => 'Рэпазіторыі або плагіны не знойдзены';
 
   @override
-  String get downloadAllProviders => 'Спампаваць усе даступныя правайдэры';
+  String get downloadAllProviders => 'Спампаваць усё';
 
   @override
   String get removeRepository => 'Выдаліць рэпазіторый';

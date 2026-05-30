@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Scaricamento sottotitolo fallito.",
   "failedToLoadSubtitles": "Caricamento sottotitoli fallito. Riprova.",
   "noReposFound": "Nessun repository o plugin trovato",
-  "downloadAllProviders": "Scarica tutti i provider disponibili",
+  "downloadAllProviders": "Scarica tutto",
   "removeRepository": "Rimuovi repository",
   "addRepo": "Aggiungi repository",
   "extensionsNotInRepos": "Estensioni non nei repository",

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Descărcarea subtitrării a eșuat.",
   "failedToLoadSubtitles": "Încărcarea subtitrărilor a eșuat. Încearcă din nou.",
   "noReposFound": "Nu s-au găsit depozite sau plugin-uri",
-  "downloadAllProviders": "Descarcă toți furnizorii disponibili",
+  "downloadAllProviders": "Descarcă tot",
   "removeRepository": "Elimină depozitul",
   "addRepo": "Adaugă depozit",
   "extensionsNotInRepos": "Extensii care nu sunt în depozite",

@@ -615,7 +615,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get noReposFound => 'Depo veya eklenti bulunamadı';
 
   @override
-  String get downloadAllProviders => 'Mevcut tüm sağlayıcıları indir';
+  String get downloadAllProviders => 'Tümünü indir';
 
   @override
   String get removeRepository => 'Depoyu Kaldır';

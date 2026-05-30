@@ -612,7 +612,7 @@ class AppLocalizationsId extends AppLocalizations {
   String get noReposFound => 'Repositori atau plugin tidak ditemukan';
 
   @override
-  String get downloadAllProviders => 'Unduh Semua penyedia tersedia';
+  String get downloadAllProviders => 'Unduh semua';
 
   @override
   String get removeRepository => 'Hapus Repositori';

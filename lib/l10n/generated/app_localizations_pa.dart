@@ -611,7 +611,7 @@ class AppLocalizationsPa extends AppLocalizations {
   String get noReposFound => 'ਕੋਈ ਰਿਪੋਜ਼ਟਰੀ ਜਾਂ ਪਲੱਗਇਨ ਨਹੀਂ ਮਿਲਿਆ';
 
   @override
-  String get downloadAllProviders => 'ਸਾਰੇ ਉਪਲਬਧ ਪ੍ਰਦਾਤਾ ਡਾਊਨਲੋਡ ਕਰੋ';
+  String get downloadAllProviders => 'ਸਭ ਡਾਊਨਲੋਡ ਕਰੋ';
 
   @override
   String get removeRepository => 'ਰਿਪੋਜ਼ਟਰੀ ਹਟਾਓ';

@@ -619,8 +619,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get noReposFound => 'ಯಾವುದೇ ರೆಪೊಸಿಟರಿಗಳು ಅಥವಾ ಪ್ಲಗಿನ್‌ಗಳು ಕಂಡುಬಂದಿಲ್ಲ';
 
   @override
-  String get downloadAllProviders =>
-      'ಲಭ್ಯವಿರುವ ಎಲ್ಲಾ ಪೂರೈಕೆದಾರರನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ';
+  String get downloadAllProviders => 'ಎಲ್ಲವನ್ನೂ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ';
 
   @override
   String get removeRepository => 'ರೆಪೊಸಿಟರಿಯನ್ನು ತೆಗೆದುಹಾಕಿ';

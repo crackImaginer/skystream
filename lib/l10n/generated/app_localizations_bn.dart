@@ -615,7 +615,7 @@ class AppLocalizationsBn extends AppLocalizations {
   String get noReposFound => 'কোন রিপোজিটরি বা প্লাগইন পাওয়া যায়নি';
 
   @override
-  String get downloadAllProviders => 'উপলব্ধ সমস্ত প্রদানকারী ডাউনলোড করুন';
+  String get downloadAllProviders => 'সব ডাউনলোড করুন';
 
   @override
   String get removeRepository => 'রিপোজিটরি সরান';

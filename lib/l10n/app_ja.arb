@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "字幕のダウンロードに失敗しました。",
   "failedToLoadSubtitles": "字幕の読み込みに失敗しました。もう一度お試しください。",
   "noReposFound": "リポジトリまたはプラグインが見つかりませんでした",
-  "downloadAllProviders": "すべてのプロバイダーをダウンロード",
+  "downloadAllProviders": "すべてダウンロード",
   "removeRepository": "リポジトリを削除",
   "addRepo": "リポジトリを追加",
   "extensionsNotInRepos": "リポジトリ外の拡張機能",

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Untertitel-Download fehlgeschlagen.",
   "failedToLoadSubtitles": "Untertitel konnten nicht geladen werden. Bitte erneut versuchen.",
   "noReposFound": "Keine Repositorys oder Plugins gefunden",
-  "downloadAllProviders": "Alle verfügbaren Anbieter herunterladen",
+  "downloadAllProviders": "Alle herunterladen",
   "removeRepository": "Repository entfernen",
   "addRepo": "Repo hinzufügen",
   "extensionsNotInRepos": "Erweiterungen nicht in Repositorys",

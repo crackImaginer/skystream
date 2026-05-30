@@ -615,8 +615,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get noReposFound => 'No se encontraron repositorios ni plugins';
 
   @override
-  String get downloadAllProviders =>
-      'Descargar todos los proveedores disponibles';
+  String get downloadAllProviders => 'Descargar todo';
 
   @override
   String get removeRepository => 'Eliminar repositorio';

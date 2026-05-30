@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "সাবটাইটেল ডাউনলোড করতে ব্যর্থ হয়েছে।",
   "failedToLoadSubtitles": "সাবটাইটেল লোড করতে ব্যর্থ হয়েছে। দয়া করে পুনরায় চেষ্টা করুন।",
   "noReposFound": "কোন রিপোজিটরি বা প্লাগইন পাওয়া যায়নি",
-  "downloadAllProviders": "উপলব্ধ সমস্ত প্রদানকারী ডাউনলোড করুন",
+  "downloadAllProviders": "সব ডাউনলোড করুন",
   "removeRepository": "রিপোজিটরি সরান",
   "addRepo": "রিপো যোগ করুন",
   "extensionsNotInRepos": "রিপোজিটরিতে নেই এমন এক্সটেনশন",

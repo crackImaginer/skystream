@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Не удалось скачать субтитры.",
   "failedToLoadSubtitles": "Не удалось загрузить субтитры. Попробуйте еще раз.",
   "noReposFound": "Репозитории или плагины не найдены",
-  "downloadAllProviders": "Скачать всех доступных провайдеров",
+  "downloadAllProviders": "Скачать все",
   "removeRepository": "Удалить репозиторий",
   "addRepo": "Добавить репозиторий",
   "extensionsNotInRepos": "Расширения не из репозиториев",

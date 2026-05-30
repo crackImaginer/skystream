@@ -615,7 +615,7 @@ class AppLocalizationsNl extends AppLocalizations {
   String get noReposFound => 'Geen repository\'s of plug-ins gevonden';
 
   @override
-  String get downloadAllProviders => 'Alle beschikbare providers downloaden';
+  String get downloadAllProviders => 'Alles downloaden';
 
   @override
   String get removeRepository => 'Repository verwijderen';

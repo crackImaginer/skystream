@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Gagal mengunduh terjemahan.",
   "failedToLoadSubtitles": "Gagal memuat terjemahan. Silakan coba lagi.",
   "noReposFound": "Repositori atau plugin tidak ditemukan",
-  "downloadAllProviders": "Unduh Semua penyedia tersedia",
+  "downloadAllProviders": "Unduh semua",
   "removeRepository": "Hapus Repositori",
   "addRepo": "Tambah Repo",
   "extensionsNotInRepos": "Ekstensi Tidak di Repositori",

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Αποτυχία λήψης υπότιτλου.",
   "failedToLoadSubtitles": "Αποτυχία φόρτωσης υπότιτλων. Δοκιμάστε ξανά.",
   "noReposFound": "Δεν βρέθηκαν αποθετήρια ή πρόσθετα",
-  "downloadAllProviders": "Λήψη όλων των διαθέσιμων παρόχων",
+  "downloadAllProviders": "Λήψη όλων",
   "removeRepository": "Αφαίρεση αποθετηρίου",
   "addRepo": "Προσθήκη αποθετηρίου",
   "extensionsNotInRepos": "Επεκτάσεις εκτός αποθετηρίων",

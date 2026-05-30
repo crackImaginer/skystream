@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "సబ్‌టైటిల్‌ను డౌన్‌లోడ్ చేయడం విఫలమైంది.",
   "failedToLoadSubtitles": "సబ్‌టైటిల్స్ లోడ్ చేయడం విఫలమైంది. దయచేసి మళ్ళీ ప్రయత్నించండి.",
   "noReposFound": "రిపోజిటరీలు లేదా ప్లగిన్లు ఏమీ కనుగొనబడలేదు",
-  "downloadAllProviders": "అందుబాటులో ఉన్న అన్ని ప్రొవైడర్లను డౌన్‌లోడ్ చేయండి",
+  "downloadAllProviders": "అన్నీ డౌన్‌లోడ్ చేయండి",
   "removeRepository": "రిపోజిటరీని తొలగించండి",
   "addRepo": "రిపో (Repo) జోడించండి",
   "extensionsNotInRepos": "రిపోజిటరీలలో లేని ఎక్స్టెన్షన్స్",

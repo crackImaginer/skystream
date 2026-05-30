@@ -614,7 +614,7 @@ class AppLocalizationsRo extends AppLocalizations {
   String get noReposFound => 'Nu s-au găsit depozite sau plugin-uri';
 
   @override
-  String get downloadAllProviders => 'Descarcă toți furnizorii disponibili';
+  String get downloadAllProviders => 'Descarcă tot';
 
   @override
   String get removeRepository => 'Elimină depozitul';

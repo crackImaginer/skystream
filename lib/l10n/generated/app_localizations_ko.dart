@@ -598,7 +598,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get noReposFound => '저장소나 플러그인을 찾을 수 없습니다';
 
   @override
-  String get downloadAllProviders => '이용 가능한 모든 제공자 다운로드';
+  String get downloadAllProviders => '모두 다운로드';
 
   @override
   String get removeRepository => '저장소 제거';

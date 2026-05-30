@@ -610,7 +610,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noReposFound => 'No repositories or plugins found';
 
   @override
-  String get downloadAllProviders => 'Download All available providers';
+  String get downloadAllProviders => 'Download All';
 
   @override
   String get removeRepository => 'Remove Repository';

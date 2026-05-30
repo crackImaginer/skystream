@@ -612,7 +612,7 @@ class AppLocalizationsUk extends AppLocalizations {
   String get noReposFound => 'Репозиторії або плагіни не знайдено';
 
   @override
-  String get downloadAllProviders => 'Завантажити всіх доступних провайдерів';
+  String get downloadAllProviders => 'Завантажити все';
 
   @override
   String get removeRepository => 'Видалити репозиторій';

@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Altyazı indirilemedi.",
   "failedToLoadSubtitles": "Altyazılar yüklenemedi. Lütfen tekrar deneyin.",
   "noReposFound": "Depo veya eklenti bulunamadı",
-  "downloadAllProviders": "Mevcut tüm sağlayıcıları indir",
+  "downloadAllProviders": "Tümünü indir",
   "removeRepository": "Depoyu Kaldır",
   "addRepo": "Depo Ekle",
   "extensionsNotInRepos": "Depolarda Olmayan Eklentiler",

@@ -610,7 +610,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get noReposFound => 'Nebyla nalezena žádná úložiště';
 
   @override
-  String get downloadAllProviders => 'Stáhnout všechny poskytovatele';
+  String get downloadAllProviders => 'Stáhnout vše';
 
   @override
   String get removeRepository => 'Odstranit úložiště';

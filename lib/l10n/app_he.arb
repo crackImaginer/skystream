@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "נכשלה הורדת כתוביות.",
   "failedToLoadSubtitles": "נכשלה טעינת כתוביות. נסה שוב.",
   "noReposFound": "לא נמצאו מאגרים או פלאגינים",
-  "downloadAllProviders": "הורד את כל הספקים הזמינים",
+  "downloadAllProviders": "הורד הכל",
   "removeRepository": "הסר מאגר",
   "addRepo": "הוסף מאגר",
   "extensionsNotInRepos": "הרחבות לא מהמאגר",

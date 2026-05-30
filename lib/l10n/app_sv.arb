@@ -238,7 +238,7 @@
   "failedToDownloadSubtitle": "Kunde inte ladda ner undertext.",
   "failedToLoadSubtitles": "Kunde inte ladda undertexter. Försök igen.",
   "noReposFound": "Inga källor eller insticksfiler hittades",
-  "downloadAllProviders": "Ladda ner alla tillgängliga leverantörer",
+  "downloadAllProviders": "Ladda ner alla",
   "removeRepository": "Ta bort källa",
   "addRepo": "Lägg till källa",
   "extensionsNotInRepos": "Tillägg som inte finns i källor",

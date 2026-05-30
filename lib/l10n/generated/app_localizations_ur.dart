@@ -614,7 +614,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String get noReposFound => 'کوئی ریپوزٹریز یا پلگ ان نہیں ملے';
 
   @override
-  String get downloadAllProviders => 'تمام دستیاب فراہم کنندگان ڈاؤن لوڈ کریں';
+  String get downloadAllProviders => 'سب ڈاؤن لوڈ کریں';
 
   @override
   String get removeRepository => 'ریپوزٹری ہٹائیں';
