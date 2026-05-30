@@ -280,6 +280,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       minHeight: 42,
                     ),
                     suffixIcon: suffix,
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 42,
+                      minHeight: 42,
+                    ),
                   ),
                 );
               },

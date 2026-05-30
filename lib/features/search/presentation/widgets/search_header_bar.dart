@@ -135,6 +135,10 @@ class _SearchHeaderBarState extends ConsumerState<SearchHeaderBar> {
                         minHeight: 42,
                       ),
                       suffixIcon: suffix,
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 42,
+                        minHeight: 42,
+                      ),
                     ),
                   );
                 },
