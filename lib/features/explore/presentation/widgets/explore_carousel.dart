@@ -225,7 +225,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                                       movie,
                                       heroHeight,
                                       index,
-                                      isDesktop: isDesktop,
+                                      isDesktop: isDesktop || isTv,
                                     ),
                                   );
                                 },
@@ -336,6 +336,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
                                 movie,
                                 heroHeight,
                                 index,
+                                isDesktop: isDesktop || isTv,
                               ),
                             );
                           },
@@ -456,6 +457,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         height,
         movie,
         index,
+        isDesktop: isDesktop,
       );
     }
 
@@ -611,7 +613,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         if (logoUrl != null)
           Padding(
             padding: const EdgeInsets.only(bottom: LayoutConstants.spacingLg),
-            child: _buildLogo(logoUrl, title),
+            child: _buildLogo(logoUrl, title, isDesktop: isDesktop),
           )
         else
           _buildTitleFallback(title, isDesktop: isDesktop),
@@ -674,8 +676,9 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
     String metadata,
     double height,
     MultimediaItem movie,
-    int index,
-  ) {
+    int index, {
+    bool isDesktop = false,
+  }) {
     return CardsWrapper(
       // Slides are wrapped in ExcludeFocus above; the carousel anchor owns
       // focus, so no autoFocus here.
@@ -726,9 +729,9 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (logoUrl != null)
-                  _buildLogo(logoUrl, title)
+                  _buildLogo(logoUrl, title, isDesktop: isDesktop)
                 else
-                  _buildTitleFallback(title),
+                  _buildTitleFallback(title, isDesktop: isDesktop),
                 const SizedBox(height: 8),
                 Text(
                   metadata,
@@ -746,7 +749,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
     );
   }
 
-  Widget _buildLogo(String logoUrl, String title) {
+  Widget _buildLogo(String logoUrl, String title, {bool isDesktop = false}) {
     if (logoUrl.toLowerCase().endsWith('.svg')) {
       return SvgPicture.network(
         logoUrl,
@@ -756,7 +759,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
         placeholderBuilder: (context) =>
             const SizedBox(height: 140, width: 300),
         errorBuilder: (context, error, stackTrace) =>
-            _buildTitleFallback(title),
+            _buildTitleFallback(title, isDesktop: isDesktop),
       );
     }
     return CachedNetworkImage(
@@ -766,7 +769,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
       fit: BoxFit.contain,
       alignment: Alignment.bottomCenter,
       placeholder: (context, url) => const SizedBox(height: 140, width: 300),
-      errorWidget: (context, url, error) => _buildTitleFallback(title),
+      errorWidget: (context, url, error) => _buildTitleFallback(title, isDesktop: isDesktop),
     );
   }
 
@@ -776,7 +779,7 @@ class _ExploreCarouselState extends ConsumerState<ExploreCarousel> {
       child: Text(
         title.toUpperCase(),
         textAlign: isDesktop ? TextAlign.left : TextAlign.center,
-        maxLines: 3,
+        maxLines: isDesktop ? 2 : 3,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: Colors.white,

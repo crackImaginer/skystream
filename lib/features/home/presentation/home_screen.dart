@@ -657,7 +657,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       child: SingleChildScrollView(
                         controller: chipsScrollController,
                         scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Row(
                           children: [
                             FilterChip(
@@ -767,138 +770,142 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           Navigator.pop(context);
                           ref.invalidate(homeDataProvider);
                         },
-                        child: ListView.builder(
-                          controller: scrollController,
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          itemCount:
-                              (filter == null ? 1 : 0) +
-                              filteredProviders.length,
-                          itemBuilder: (context, index) {
-                            if (filter == null && index == 0) {
+                        child: Material(
+                          color: Colors.transparent,
+                          clipBehavior: Clip.hardEdge,
+                          child: ListView.builder(
+                            controller: scrollController,
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            itemCount:
+                                (filter == null ? 1 : 0) +
+                                filteredProviders.length,
+                            itemBuilder: (context, index) {
+                              if (filter == null && index == 0) {
+                                return SizedBox(
+                                  height: 56.0,
+                                  child: Center(
+                                    child: ListTile(
+                                      title: Text(l10n.none),
+                                      leading: const Radio<String?>(value: null),
+                                      autofocus: index == targetIndex,
+                                      onTap: () {
+                                        ref
+                                            .read(activeProviderProvider.notifier)
+                                            .set(null);
+                                        Navigator.pop(context);
+                                        ref.invalidate(homeDataProvider);
+                                      },
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final p =
+                                  filteredProviders[filter == null
+                                      ? index - 1
+                                      : index];
+                              final isDebug = p.isDebug;
+                              final isSubprovider = p.packageName.contains('::');
+                              String pluginTag = '';
+                              if (isSubprovider) {
+                                final parentPackageName = p.packageName.substring(
+                                  0,
+                                  p.packageName.indexOf('::'),
+                                );
+                                final plugin = installedPlugins
+                                    .cast<ExtensionPlugin?>()
+                                    .firstWhere(
+                                      (pl) =>
+                                          pl?.packageName == parentPackageName,
+                                      orElse: () => null,
+                                    );
+                                pluginTag = plugin?.name ?? parentPackageName;
+                              }
+
                               return SizedBox(
                                 height: 56.0,
                                 child: Center(
                                   child: ListTile(
-                                    title: Text(l10n.none),
-                                    leading: const Radio<String?>(value: null),
                                     autofocus: index == targetIndex,
+                                    title: Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            p.name,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isSubprovider) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 120,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.secondaryContainer,
+                                              borderRadius: BorderRadius.circular(
+                                                4,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              pluginTag,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSecondaryContainer,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                        if (isDebug) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red,
+                                              borderRadius: BorderRadius.circular(
+                                                4,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              l10n.debug,
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    leading: Radio<String?>(value: p.packageName),
                                     onTap: () {
                                       ref
                                           .read(activeProviderProvider.notifier)
-                                          .set(null);
+                                          .set(p);
                                       Navigator.pop(context);
                                       ref.invalidate(homeDataProvider);
                                     },
                                   ),
                                 ),
                               );
-                            }
-
-                            final p =
-                                filteredProviders[filter == null
-                                    ? index - 1
-                                    : index];
-                            final isDebug = p.isDebug;
-                            final isSubprovider = p.packageName.contains('::');
-                            String pluginTag = '';
-                            if (isSubprovider) {
-                              final parentPackageName = p.packageName.substring(
-                                0,
-                                p.packageName.indexOf('::'),
-                              );
-                              final plugin = installedPlugins
-                                  .cast<ExtensionPlugin?>()
-                                  .firstWhere(
-                                    (pl) =>
-                                        pl?.packageName == parentPackageName,
-                                    orElse: () => null,
-                                  );
-                              pluginTag = plugin?.name ?? parentPackageName;
-                            }
-
-                            return SizedBox(
-                              height: 56.0,
-                              child: Center(
-                                child: ListTile(
-                                  autofocus: index == targetIndex,
-                                  title: Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          p.name,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (isSubprovider) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 120,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.secondaryContainer,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            pluginTag,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSecondaryContainer,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                      if (isDebug) ...[
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            l10n.debug,
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  leading: Radio<String?>(value: p.packageName),
-                                  onTap: () {
-                                    ref
-                                        .read(activeProviderProvider.notifier)
-                                        .set(p);
-                                    Navigator.pop(context);
-                                    ref.invalidate(homeDataProvider);
-                                  },
-                                ),
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
                       );
                     },
