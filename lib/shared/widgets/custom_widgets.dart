@@ -461,19 +461,16 @@ class _CustomButtonState extends State<CustomButton> {
       decoration: BoxDecoration(
         shape: outerShape,
         borderRadius: outerBorderRadius,
-        // Subtle accent ring + soft glow (the keyboard/D-pad focus cue).
+        // Accent ring + glow (the keyboard/D-pad focus cue).
         border: showHighlight
-            ? Border.all(
-                color: primaryColor.withValues(alpha: 0.9),
-                width: 1.5,
-              )
+            ? Border.all(color: primaryColor, width: 2)
             : null,
         boxShadow: showHighlight
             ? [
                 BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.35),
-                  blurRadius: 14,
-                  spreadRadius: 0.5,
+                  color: primaryColor.withValues(alpha: 0.6),
+                  blurRadius: 24,
+                  spreadRadius: 2,
                 ),
               ]
             : null,
