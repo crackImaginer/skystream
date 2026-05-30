@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:video_view/video_view.dart' as vv;
 import '../../../../shared/widgets/custom_widgets.dart';
 import 'hotstar_player_style.dart';
-import 'player_stream_widgets.dart';
 
 /// Top zone: back button + title/subtitle. Paints its own top scrim so the
 /// chrome no longer needs a separate fixed-height Positioned gradient.
@@ -43,8 +40,9 @@ class PlayerTopBar extends StatelessWidget {
                 onPressed: onBack,
                 isTv: isTv,
                 focusNode: backFocusNode,
+                iconSize: isTv ? 34 : 30,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -136,12 +134,11 @@ class PlayerBottomBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(edge, 8, edge, 14),
+          padding: EdgeInsets.fromLTRB(edge, 2, edge, 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               progressBar,
-              const SizedBox(height: 4),
               FocusTraversalGroup(
                 child: Focus(
                   canRequestFocus: false,
@@ -166,80 +163,6 @@ class PlayerBottomBar extends StatelessWidget {
   }
 }
 
-/// Center playback cluster (rewind / play-pause / forward) used on touch
-/// devices where the thumb-reach center tap target is expected.
-class PlayerCenterControls extends StatelessWidget {
-  final Player player;
-  final vv.VideoController? videoViewController;
-  final bool isLoading;
-  final bool isTv;
-  final bool canSeek;
-  final FocusNode? playFocusNode;
-  final VoidCallback onSeekBackward;
-  final VoidCallback onSeekForward;
-  final VoidCallback onPlayPause;
-
-  const PlayerCenterControls({
-    super.key,
-    required this.player,
-    required this.onSeekBackward,
-    required this.onSeekForward,
-    required this.onPlayPause,
-    this.videoViewController,
-    this.isLoading = false,
-    this.isTv = false,
-    this.canSeek = true,
-    this.playFocusNode,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: PlayerPlayPauseButton(
-        player: player,
-        videoViewController: videoViewController,
-        isLoading: isLoading,
-        isTv: isTv,
-        size: 82,
-        focusNode: playFocusNode,
-        onPressed: onPlayPause,
-      ),
-    );
-  }
-}
-
-/// A circular rewind/forward button. Used at large size in the touch center
-/// cluster and at compact size inline in the TV/desktop control row.
-class PlayerSeekButton extends StatelessWidget {
-  final IconData icon;
-  final double size;
-  final bool isTv;
-  final VoidCallback onPressed;
-
-  const PlayerSeekButton({
-    super.key,
-    required this.icon,
-    required this.size,
-    required this.isTv,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomButton(
-      showFocusHighlight: isTv,
-      onPressed: onPressed,
-      shape: const CircleBorder(),
-      child: Container(
-        width: size + 16,
-        height: size + 16,
-        alignment: Alignment.center,
-        child: Icon(icon, color: Colors.white, size: size),
-      ),
-    );
-  }
-}
-
 /// Compact icon-only button for utilities (resize, PiP, fullscreen) and the
 /// top-bar back button. Tooltip doubles as the semantics label.
 class PlayerIconButton extends StatelessWidget {
@@ -250,6 +173,10 @@ class PlayerIconButton extends StatelessWidget {
   final bool highlight;
   final FocusNode? focusNode;
 
+  /// Optional icon-size override (the tap target grows to match). Used by the
+  /// top-bar back button so it reads at the same weight as the title.
+  final double? iconSize;
+
   const PlayerIconButton({
     super.key,
     required this.icon,
@@ -258,11 +185,13 @@ class PlayerIconButton extends StatelessWidget {
     this.isTv = false,
     this.highlight = false,
     this.focusNode,
+    this.iconSize,
   });
 
   @override
   Widget build(BuildContext context) {
-    final double box = isTv ? 48 : 44;
+    final double glyph = iconSize ?? (isTv ? 28 : 26);
+    final double box = glyph + (isTv ? 20 : 18);
     return Tooltip(
       message: tooltip,
       child: CustomButton(
@@ -278,7 +207,7 @@ class PlayerIconButton extends StatelessWidget {
             color: highlight
                 ? Theme.of(context).colorScheme.primary
                 : Colors.white,
-            size: isTv ? 28 : 26,
+            size: glyph,
           ),
         ),
       ),

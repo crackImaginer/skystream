@@ -462,9 +462,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       // it. Short enough not to eat an intentional fast double-press.
       return true;
     }
-    if (ref.read(playerControllerProvider).showSourcesPanel) {
+    final s = ref.read(playerControllerProvider);
+    if (s.showSourcesPanel || s.showEpisodeList || s.showContentPanel) {
       _lastBackAt = now;
-      _controlsKeyFinal.currentState?.closeSourcesPanel();
+      _controlsKeyFinal.currentState?.closeActivePanel();
       return true;
     }
     if (_isTv && _controlsVisible.value) {

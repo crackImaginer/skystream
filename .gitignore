@@ -89,5 +89,3 @@ skystream-tools/
 tree-shaking-test*.js
 
 node_modules/
-/AUDIT_FINDINGS.md
-/SHIP_PLAN.md

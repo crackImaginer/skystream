@@ -26,7 +26,6 @@ import 'player_side_panel.dart';
 import 'player_bottom_sheets.dart';
 import 'player_loading_overlay.dart';
 import 'player_osd_overlay.dart';
-import 'player_episode_overlay.dart';
 import 'skip_segment_overlay.dart';
 import 'hotstar_player_style.dart';
 import '../player_platform_service.dart';
@@ -422,7 +421,7 @@ class SkyStreamPlayerControlsState
   }
 
   Future<void> _handleDoubleTap() async {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
 
     // Desktop Double Tap -> Toggle Fullscreen
     try {
@@ -448,7 +447,12 @@ class SkyStreamPlayerControlsState
   }
 
   void _startTouchSpeedHold() {
-    if (_isLocked || _isTv || !(Platform.isAndroid || Platform.isIOS)) return;
+    if (_isLocked ||
+        _panelOpen ||
+        _isTv ||
+        !(Platform.isAndroid || Platform.isIOS)) {
+      return;
+    }
     if (_touchHeldForSpeed) return;
     _touchHeldForSpeed = true;
     _speedBeforeTouchHold = ref.read(playerControllerProvider).playbackSpeed;
@@ -532,30 +536,69 @@ class SkyStreamPlayerControlsState
     }
   }
 
-  /// True while the sources side panel owns the screen. Used to suspend the
-  /// chrome and its auto-hide timer so the panel isn't yanked out from under
-  /// the user (req: no auto-hide while the side bar is active).
-  bool get _panelOpen =>
-      ref.read(playerControllerProvider).showSourcesPanel;
+  /// True while a side panel (sources/tracks or episodes) owns the screen. Used
+  /// to suspend the chrome and its auto-hide timer so the panel isn't yanked out
+  /// from under the user (req: no auto-hide while a side bar is active).
+  bool get _panelOpen {
+    final s = ref.read(playerControllerProvider);
+    return s.showSourcesPanel || s.showEpisodeList || s.showContentPanel;
+  }
 
-  /// Open the sources/audio/subtitles side panel at [tab] (0=Sources, 1=Audio,
-  /// 2=Subtitles): hide the chrome and suspend auto-hide. The panel handles its
-  /// own focus (the active tab's current row).
-  void openSourcesPanel(int tab) {
+  /// Hide the chrome and suspend auto-hide so a side panel can take over. The
+  /// panel handles its own focus (its current/anchor row).
+  void _enterPanelMode() {
     _cancelHideTimer();
     if (_isVisible) {
       setState(() => _isVisible = false);
       widget.onVisibilityChanged?.call(false);
     }
+  }
+
+  /// Open the sources/audio/subtitles side panel at [tab] (0=Sources, 1=Audio,
+  /// 2=Subtitles).
+  void openSourcesPanel(int tab) {
+    _enterPanelMode();
     ref.read(playerControllerProvider.notifier).openSourcesPanel(tab: tab);
   }
 
-  /// Close the panel and bring the chrome back with a fresh auto-hide timer —
-  /// the Back/dismiss path described in the spec.
+  /// Open the episodes side panel.
+  void openEpisodesPanel() {
+    _enterPanelMode();
+    ref.read(playerControllerProvider.notifier).openEpisodeList();
+  }
+
+  /// Open the torrent content (file picker) side panel.
+  void openContentPanel() {
+    _enterPanelMode();
+    ref.read(playerControllerProvider.notifier).openContentPanel();
+  }
+
+  /// Close the sources panel and bring the chrome back with a fresh auto-hide.
   void closeSourcesPanel() {
-    if (!_panelOpen) return;
+    if (!ref.read(playerControllerProvider).showSourcesPanel) return;
     ref.read(playerControllerProvider.notifier).closeSourcesPanel();
     showControls();
+  }
+
+  /// Close the episodes panel and bring the chrome back with a fresh auto-hide.
+  void closeEpisodesPanel() {
+    if (!ref.read(playerControllerProvider).showEpisodeList) return;
+    ref.read(playerControllerProvider.notifier).closeEpisodeList();
+    showControls();
+  }
+
+  /// Close the content panel and bring the chrome back with a fresh auto-hide.
+  void closeContentPanel() {
+    if (!ref.read(playerControllerProvider).showContentPanel) return;
+    ref.read(playerControllerProvider.notifier).closeContentPanel();
+    showControls();
+  }
+
+  /// Close whichever side panel is open — the shared Back/dismiss entry point.
+  void closeActivePanel() {
+    closeSourcesPanel();
+    closeEpisodesPanel();
+    closeContentPanel();
   }
 
   void _onFocusChange() {
@@ -716,7 +759,7 @@ class SkyStreamPlayerControlsState
   }
 
   Future<void> _handleDragStart(DragStartDetails details) async {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     final size = MediaQuery.sizeOf(context);
     await ref
         .read(playerGestureHandlerProvider.notifier)
@@ -724,18 +767,18 @@ class SkyStreamPlayerControlsState
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     ref.read(playerGestureHandlerProvider.notifier).handleDragUpdate(details);
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     ref.read(playerGestureHandlerProvider.notifier).handleDragEnd(details);
   }
 
   // Horizontal Seek
   Future<void> _handleHorizontalDragStart(DragStartDetails details) async {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     final size = MediaQuery.sizeOf(context);
     final bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
     await ref
@@ -750,14 +793,14 @@ class SkyStreamPlayerControlsState
   }
 
   void _handleHorizontalDragUpdate(DragUpdateDetails details) {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     ref
         .read(playerGestureHandlerProvider.notifier)
         .handleHorizontalDragUpdate(details);
   }
 
   void _handleHorizontalDragEnd(DragEndDetails details) {
-    if (_isLocked) return;
+    if (_isLocked || _panelOpen) return;
     ref
         .read(playerGestureHandlerProvider.notifier)
         .handleHorizontalDragEnd(details);
@@ -931,6 +974,7 @@ class SkyStreamPlayerControlsState
         onLongPressCancel: _endTouchSpeedHold,
         child: GestureDetector(
           onTap: () {
+            if (_panelOpen) return; // the panel's scrim owns dismiss taps
             final gestureState = ref.read(playerGestureHandlerProvider);
             if (gestureState.showOSD) {
               ref.read(playerGestureHandlerProvider.notifier).dismissOSD();
@@ -968,8 +1012,42 @@ class SkyStreamPlayerControlsState
                     maxPlaybackSpeed: maxPlaybackSpeed,
                   ),
 
-                // Persistent buffering indicator
-                PlayerBufferingIndicator(isVisible: _isVisible),
+                // Touch play/pause — a screen-centered overlay (not inside the
+                // chrome's shorter middle band) so it lines up vertically with
+                // the OSD and seek animations. Fades with the chrome.
+                if (!_isTv &&
+                    (Platform.isAndroid || Platform.isIOS) &&
+                    !_isLocked)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: !_isVisible,
+                      child: AnimatedOpacity(
+                        opacity: _isVisible ? 1.0 : 0.0,
+                        duration: _animDuration,
+                        child: Center(
+                          child: PlayerPlayPauseButton(
+                            player: widget.player,
+                            videoViewController: widget.videoViewController,
+                            isLoading: widget.isLoading,
+                            isTv: _isTv,
+                            size: 82,
+                            backgroundColor: Colors.black.withValues(
+                              alpha: 0.32,
+                            ),
+                            onPressed: _togglePlay,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Persistent buffering indicator. On touch it defers to the
+                // centered play/pause spinner while controls are visible; on
+                // desktop/TV (play/pause in the corner) it stays centered.
+                PlayerBufferingIndicator(
+                  isVisible: _isVisible,
+                  isTouch: !_isTv && (Platform.isAndroid || Platform.isIOS),
+                ),
 
                 // Seek kick animation — a single Align (no nested Stack):
                 // ~8% in from the seeking edge, ~45% down from the top.
@@ -993,21 +1071,30 @@ class SkyStreamPlayerControlsState
                 ),
 
                 // Torrent stats card — top-right, toggled by the Stats action.
-                // Lives directly in the single overlay Stack (non-focusable).
+                // Responsive width, cleared below the top bar, and pointer-
+                // transparent so it never blocks the player. Non-focusable.
                 if (torrentStatus != null && _showTorrentInfo)
-                  SafeArea(
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          top: 72,
-                          right: _isTv
-                              ? HotstarPlayerStyle.tvEdgeInset
-                              : HotstarPlayerStyle.edgeInset,
-                        ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 320),
-                          child: TorrentInfoWidget(status: torrentStatus),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: SafeArea(
+                        child: Align(
+                          alignment: Alignment.topRight,
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              // Clear the top bar (back + title).
+                              top: _isTv ? 88 : 68,
+                              right: _isTv
+                                  ? HotstarPlayerStyle.tvEdgeInset
+                                  : HotstarPlayerStyle.edgeInset,
+                              left: 12,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: (size.width * 0.36).clamp(240.0, 360.0),
+                              ),
+                              child: TorrentInfoWidget(status: torrentStatus),
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1076,25 +1163,52 @@ class SkyStreamPlayerControlsState
                     },
                   ),
 
-                // Episode Sidebar Overlay
+                // Episodes side drawer (series only) — same shell as the
+                // sources panel, right-anchored. Topmost so it sits above the
+                // chrome. Pure Row layout inside (no nested Stack).
                 if (isSeries &&
                     ref
                             .read(playerControllerProvider.notifier)
                             .multimediaItem !=
                         null)
-                  PlayerEpisodeOverlay(
-                    item: ref
-                        .read(playerControllerProvider.notifier)
-                        .multimediaItem!,
-                    isVisible: showEpisodeList && !_isLocked,
-                    isTv: _isTv,
-                    onDismiss: () => ref
-                        .read(playerControllerProvider.notifier)
-                        .toggleEpisodeList(),
+                  Positioned.fill(
+                    child: PlayerSidePanel(
+                      isVisible: showEpisodeList && !_isLocked,
+                      isTv: _isTv,
+                      onDismiss: closeEpisodesPanel,
+                      child: PlayerEpisodesPanel(
+                        item: ref
+                            .read(playerControllerProvider.notifier)
+                            .multimediaItem!,
+                        isTv: _isTv,
+                        onClose: closeEpisodesPanel,
+                      ),
+                    ),
                   ),
 
-                // Sources / Audio / Subtitles left drawer — topmost so it sits
-                // above the chrome. Pure Row layout inside (no nested Stack).
+                // Torrent content (file picker) drawer — same shell.
+                if (torrentStatus != null)
+                  Positioned.fill(
+                    child: PlayerSidePanel(
+                      isVisible: ref.watch(
+                        playerControllerProvider.select(
+                          (s) => s.showContentPanel,
+                        ),
+                      ),
+                      isTv: _isTv,
+                      onDismiss: closeContentPanel,
+                      child: PlayerContentPanel(
+                        isTv: _isTv,
+                        onFileSelected: (idx) => ref
+                            .read(playerControllerProvider.notifier)
+                            .onTorrentFileSelected(idx),
+                        onClose: closeContentPanel,
+                      ),
+                    ),
+                  ),
+
+                // Sources / Audio / Subtitles drawer — topmost so it sits above
+                // the chrome. Pure Row layout inside (no nested Stack).
                 Positioned.fill(
                   child: PlayerSidePanel(
                     isVisible: ref.watch(
@@ -1175,17 +1289,6 @@ class SkyStreamPlayerControlsState
     final isTouch = !_isTv && (Platform.isAndroid || Platform.isIOS);
     final isDesktop =
         Platform.isMacOS || Platform.isWindows || Platform.isLinux;
-    final canSeek = ref.watch(
-      playerControllerProvider.select((s) => s.canSeek),
-    );
-    final seekStep =
-        ref.watch(
-          playerSettingsProvider.select((s) => s.asData?.value.seekDuration),
-        ) ??
-        10;
-
-    void seekBack() => _seekRelative(Duration(seconds: -seekStep));
-    void seekForward() => _seekRelative(Duration(seconds: seekStep));
 
     // Playback placement: touch keeps the big thumb-reach triplet centered;
     // TV and desktop fold compact playback into the start of the controls row
@@ -1198,6 +1301,8 @@ class SkyStreamPlayerControlsState
       size: 52,
       focusNode: _playFocusNode,
       onPressed: _togglePlay,
+      // Corner button (desktop/TV) — let the centered indicator show buffering.
+      showBufferingSpinner: false,
     );
 
     // Left cluster: play/pause (non-touch), lock (touch only), next episode
@@ -1262,13 +1367,7 @@ class SkyStreamPlayerControlsState
         PlayerIconButton(
           icon: Icons.folder,
           tooltip: l10n.content,
-          onPressed: () => PlayerBottomSheets.showContentSelection(
-            context: context,
-            torrentStatus: torrentStatus,
-            onTorrentFileSelected: (idx) => ref
-                .read(playerControllerProvider.notifier)
-                .onTorrentFileSelected(idx),
-          ),
+          onPressed: openContentPanel,
           isTv: _isTv,
         ),
       if (torrentStatus != null)
@@ -1290,9 +1389,7 @@ class SkyStreamPlayerControlsState
         PlayerIconButton(
           icon: Icons.playlist_play_rounded,
           tooltip: l10n.episodes,
-          onPressed: () => ref
-              .read(playerControllerProvider.notifier)
-              .toggleEpisodeList(),
+          onPressed: openEpisodesPanel,
           isTv: _isTv,
         ),
       PlayerIconButton(
@@ -1346,25 +1443,11 @@ class SkyStreamPlayerControlsState
                     backFocusNode: _backFocusNode,
                   ),
                 ),
-                // Center zone: touch keeps the big play/seek cluster; TV and
-                // desktop leave it empty (playback lives in the bottom row).
-                // No Stack here — the torrent info card is the single overlay
-                // Stack's job in build().
-                Expanded(
-                  child: isTouch
-                      ? PlayerCenterControls(
-                          player: widget.player,
-                          videoViewController: widget.videoViewController,
-                          isLoading: widget.isLoading,
-                          isTv: _isTv,
-                          canSeek: canSeek,
-                          playFocusNode: _playFocusNode,
-                          onSeekBackward: seekBack,
-                          onSeekForward: seekForward,
-                          onPlayPause: _togglePlay,
-                        )
-                      : const SizedBox.expand(),
-                ),
+                // Center zone stays empty: the touch play/pause is rendered as
+                // a screen-centered overlay in the root Stack (build()) so it
+                // lines up with the OSD / seek animations, instead of being
+                // centered within this shorter middle band.
+                const Expanded(child: SizedBox.expand()),
                 _absorbGestures(
                   PlayerBottomBar(
                     isTv: _isTv,

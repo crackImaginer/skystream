@@ -180,6 +180,9 @@ class PlayerState {
 
   /// Which tab the side panel should show: 0 = Sources, 1 = Audio, 2 = Subtitles.
   final int sourcesPanelTab;
+
+  /// Whether the torrent content (file picker) side panel is open.
+  final bool showContentPanel;
   final double playbackSpeed;
   final bool isLive;
   final double subtitleDelay;
@@ -216,6 +219,7 @@ class PlayerState {
     this.showEpisodeList = false,
     this.showSourcesPanel = false,
     this.sourcesPanelTab = 0,
+    this.showContentPanel = false,
     this.playbackSpeed = 1.0,
     this.isLive = false,
     this.isSeekable = false,
@@ -272,6 +276,7 @@ class PlayerState {
     bool? showEpisodeList,
     bool? showSourcesPanel,
     int? sourcesPanelTab,
+    bool? showContentPanel,
     double? playbackSpeed,
     bool? isLive,
     bool? isSeekable,
@@ -308,6 +313,7 @@ class PlayerState {
       showEpisodeList: showEpisodeList ?? this.showEpisodeList,
       showSourcesPanel: showSourcesPanel ?? this.showSourcesPanel,
       sourcesPanelTab: sourcesPanelTab ?? this.sourcesPanelTab,
+      showContentPanel: showContentPanel ?? this.showContentPanel,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       isLive: isLive ?? this.isLive,
       isSeekable: isSeekable ?? this.isSeekable,
@@ -3219,6 +3225,15 @@ class PlayerController extends Notifier<PlayerState> {
 
   void openSourcesPanel({int tab = 0}) {
     state = state.copyWith(showSourcesPanel: true, sourcesPanelTab: tab);
+  }
+
+  void openContentPanel() {
+    state = state.copyWith(showContentPanel: true);
+  }
+
+  void closeContentPanel() {
+    if (!state.showContentPanel) return;
+    state = state.copyWith(showContentPanel: false);
   }
 
   void closeSourcesPanel() {

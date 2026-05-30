@@ -4,12 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
-import '../../../../core/models/torrent_status.dart';
-import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../settings/presentation/player_settings_provider.dart';
 import '../player_controller.dart';
-import 'player_utils.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../../shared/widgets/custom_widgets.dart';
 import '../../../../shared/widgets/desktop_scroll_wrapper.dart';
@@ -320,108 +317,6 @@ class PlayerBottomSheets {
     );
   }
 
-  static void showContentSelection({
-    required BuildContext context,
-    required TorrentStatus? torrentStatus,
-    required void Function(int) onTorrentFileSelected,
-  }) {
-    if (torrentStatus == null) return;
-    final files = torrentStatus.data['file_stats'] as List<dynamic>?;
-    if (files == null || files.isEmpty) return;
-
-    final theme = Theme.of(context);
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor:
-          theme.bottomSheetTheme.modalBackgroundColor ??
-          theme.dialogTheme.backgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      isScrollControlled: true,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-                  child: Text(
-                    AppLocalizations.of(context)!.torrentContent,
-                    style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Divider(color: theme.dividerColor, height: 1),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: files.length,
-                    itemBuilder: (ctx, index) {
-                      final file = files[index];
-                      final path =
-                          file['path'] as String? ??
-                          AppLocalizations.of(context)!.unknown;
-                      final length = file['length'] as int? ?? 0;
-                      final id =
-                          file['id'] as int? ??
-                          (index + 1); // Fallback if id missing
-
-                      // Simple check if this looks like a video
-                      final isVideo =
-                          path.toLowerCase().endsWith(".mp4") ||
-                          path.toLowerCase().endsWith(".mkv") ||
-                          path.toLowerCase().endsWith(".avi") ||
-                          path.toLowerCase().endsWith(".mov");
-
-                      return ListTile(
-                        autofocus: index == 0,
-                        leading: Icon(
-                          isVideo
-                              ? Icons.movie_creation_outlined
-                              : Icons.insert_drive_file_outlined,
-                          color: isVideo
-                              ? theme.colorScheme.primary
-                              : theme.iconTheme.color,
-                        ),
-                        title: Text(
-                          path.split('/').last, // Show filename only
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                        subtitle: Text(
-                          formatBytes(length),
-                          style: TextStyle(
-                            color: theme.textTheme.bodySmall?.color,
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          onTorrentFileSelected(id);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   static Future<void> showTracksSelection({
     required BuildContext context,
     required WidgetRef ref,
@@ -621,6 +516,11 @@ class PlayerBottomSheets {
                                   divisions: sliderDivisions > 0
                                       ? sliderDivisions
                                       : null,
+                                  // Pure visual indicator on TV — the −/+
+                                  // buttons adjust it. Keeping it out of focus
+                                  // traversal means D-pad Up/Down isn't trapped
+                                  // and moves between the buttons and presets.
+                                  focusable: false,
                                   onChanged: setSpeed,
                                 ),
                               ),

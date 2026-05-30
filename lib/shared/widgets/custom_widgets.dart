@@ -20,6 +20,11 @@ class CustomSlider extends StatefulWidget {
   final VoidCallback? onArrowUp;
   final VoidCallback? onArrowDown;
 
+  /// When false the slider is removed from focus traversal entirely (it can't be
+  /// focused and doesn't intercept arrow keys). Use when the value is driven by
+  /// external −/+ controls and the slider is just a visual indicator.
+  final bool focusable;
+
   const CustomSlider({
     super.key,
     required this.value,
@@ -35,6 +40,7 @@ class CustomSlider extends StatefulWidget {
     this.focusNode,
     this.onArrowUp,
     this.onArrowDown,
+    this.focusable = true,
   });
 
   @override
@@ -86,7 +92,10 @@ class _CustomSliderState extends State<CustomSlider> {
   Widget build(BuildContext context) {
     return Focus(
       focusNode: _focusNode,
+      canRequestFocus: widget.focusable,
+      skipTraversal: !widget.focusable,
       onKeyEvent: (node, event) {
+        if (!widget.focusable) return KeyEventResult.ignored;
         if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
           return KeyEventResult.ignored;
         }

@@ -22,6 +22,10 @@ class HotstarPlayerStyle {
   static const Color focus = Color(0x660A84FF);
   static const Color liveRed = Color(0xFFE53935);
 
+  /// Marker on the scrubber for skip segments (intro / recap / outro). A warm
+  /// amber so it reads clearly against the blue progress and grey track.
+  static const Color skipSegment = Color(0xFFFFC107);
+
   // --- Motion ---
   static const Duration controlFadeDuration = Duration(milliseconds: 220);
   static const Duration fastMotionDuration = Duration(milliseconds: 160);
