@@ -29,35 +29,69 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
     final isLarge = context.isTabletOrLarger;
     final double totalHeight = isLarge ? 180.0 : 150.0;
 
-    return switch (libraryState) {
-      LibraryLoading() => const Center(child: CircularProgressIndicator()),
-      LibraryError(message: final msg) => Center(child: Text(msg)),
-      LibraryEmpty() => _buildEmpty(context),
-      LibrarySuccess(items: final items) => GridView.builder(
-        padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: totalHeight,
-          childAspectRatio: 2 / 3.4,
-          crossAxisSpacing: LayoutConstants.spacingMd,
-          mainAxisSpacing: LayoutConstants.spacingMd,
+    return Column(
+      children: [
+        // Section header for Movies
+        ListTile(
+          title: Text('Movies'),
         ),
-        itemCount: items.length,
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return MultimediaCard(
-            key: ValueKey(item.url),
-            imageUrl:
-                AppImageFallbacks.poster(item.posterUrl, label: item.title) ??
-                '',
-            title: item.title,
-            heroTag: 'lib_bookmark_${item.url}_$index',
-            onTap: () => DetailsRoute(
-              $extra: DetailsRouteExtra(item: item),
-            ).push<void>(context),
-          );
-        },
+        // Section content for Movies
+        _buildSectionContent(
+          libraryState.items
+            ..where((item) => item.contentType == MultimediaContentType.movie)
+            ..toList(),
+        ),
+        // Section header for TV Shows
+        ListTile(
+          title: Text('TV Shows'),
+        ),
+        // Section content for TV Shows
+        _buildSectionContent(
+          libraryState.items
+            ..where((item) => item.contentType == MultimediaContentType.show)
+            ..toList(),
+        ),
+        // Section header for Others
+        ListTile(
+          title: Text('Others'),
+        ),
+        // Section content for Others
+        _buildSectionContent(
+          libraryState.items
+            ..where((item) => item.contentType == MultimediaContentType.other)
+            ..toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionContent(List<MultimediaItem> items) {
+
+    items.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    return GridView.builder(
+      padding: const EdgeInsets.all(LayoutConstants.spacingMd),
+      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: totalHeight,
+        childAspectRatio: 2 / 3.4,
+        crossAxisSpacing: LayoutConstants.spacingMd,
+        mainAxisSpacing: LayoutConstants.spacingMd,
       ),
-    };
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return MultimediaCard(
+          key: ValueKey(item.url),
+          imageUrl:
+              AppImageFallbacks.poster(item.posterUrl, label: item.title) ??
+              '',
+          title: item.title,
+          heroTag: 'lib_bookmark_${item.url}_$index',
+          onTap: () => DetailsRoute(
+            $extra: DetailsRouteExtra(item: item),
+          ).push<void>(context),
+        );
+      },
+    );
   }
 
   Widget _buildEmpty(BuildContext context) {
