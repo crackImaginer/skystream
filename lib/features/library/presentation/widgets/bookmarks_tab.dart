@@ -28,49 +28,60 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
   Widget build(BuildContext context) {
     super.build(context);
     final libraryState = ref.watch(libraryProvider);
-    final isLarge = context.isTabletOrLarger;
+
+    // Prevent crashing if the state is loading, empty, or error
+    if (libraryState is! LibrarySuccess) {
+      return _buildEmpty(context);
+    }
 
     return Column(
       children: [
         // Section header for Movies
-        ListTile(
+        const ListTile(
           title: Text('Movies'),
         ),
         // Section content for Movies
         _buildSectionContent(
           libraryState.items
-            ..where((item) => item.contentType == MultimediaContentType.movie)
-            ..toList(),
+            .where((item) => item.contentType == MultimediaContentType.movie)
+            .toList(),
         ),
         // Section header for TV Shows
-        ListTile(
+        const ListTile(
           title: Text('TV Shows'),
         ),
         // Section content for TV Shows
         _buildSectionContent(
           libraryState.items
-            ..where((item) => item.contentType == MultimediaContentType.show)
-            ..toList(),
+            // Fixed: Changed .show to .series based on your MultimediaContentType enum
+            .where((item) => item.contentType == MultimediaContentType.series) 
+            .toList(),
         ),
         // Section header for Others
-        ListTile(
+        const ListTile(
           title: Text('Others'),
         ),
         // Section content for Others
         _buildSectionContent(
           libraryState.items
-            ..where((item) => item.contentType == MultimediaContentType.other)
-            ..toList(),
+            .where((item) => item.contentType != MultimediaContentType.movie && 
+                             item.contentType != MultimediaContentType.series)
+            .toList(),
         ),
       ],
     );
   }
 
   Widget _buildSectionContent(List<MultimediaItem> items) {
+    // Moved isLarge here so totalHeight can access it
+    final isLarge = context.isTabletOrLarger; 
     final double totalHeight = isLarge ? 180.0 : 150.0;
-    items.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    
+    items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     
     return GridView.builder(
+      shrinkWrap: true, // Added so GridView works inside a Column
+      physics: const NeverScrollableScrollPhysics(), // Delegate scrolling to parent
       padding: const EdgeInsets.all(LayoutConstants.spacingMd),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: totalHeight,

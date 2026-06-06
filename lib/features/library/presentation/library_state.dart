@@ -19,11 +19,10 @@ class LibraryEmpty extends LibraryState {
 }
 
 class LibrarySuccess extends LibraryState {
+  @override
   final List<MultimediaItem> items;
 
   const LibrarySuccess(this.items);
-  @override
-  List<MultimediaItem> get items => throw UnimplementedError();
 }
 
 class LibraryError extends LibraryState {
