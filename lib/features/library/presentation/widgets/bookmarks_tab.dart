@@ -6,6 +6,7 @@ import '../../../../core/utils/image_fallbacks.dart';
 import '../../../../core/utils/layout_constants.dart';
 import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
+import '../../../../core/domain/entity/multimedia_item.dart';
 import '../library_provider.dart';
 
 import '../library_state.dart';
@@ -19,6 +20,7 @@ class BookmarksTab extends ConsumerStatefulWidget {
 
 class _BookmarksTabState extends ConsumerState<BookmarksTab>
     with AutomaticKeepAliveClientMixin {
+
   @override
   bool get wantKeepAlive => true;
 
@@ -27,7 +29,6 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
     super.build(context);
     final libraryState = ref.watch(libraryProvider);
     final isLarge = context.isTabletOrLarger;
-    final double totalHeight = isLarge ? 180.0 : 150.0;
 
     return Column(
       children: [
@@ -66,8 +67,9 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
   }
 
   Widget _buildSectionContent(List<MultimediaItem> items) {
-
+    final double totalHeight = isLarge ? 180.0 : 150.0;
     items.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    
     return GridView.builder(
       padding: const EdgeInsets.all(LayoutConstants.spacingMd),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
