@@ -73,15 +73,15 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
   }
 
   Widget _buildSectionContent(List<MultimediaItem> items) {
-    // Moved isLarge here so totalHeight can access it
-    final isLarge = context.isTabletOrLarger; 
-    final double totalHeight = isLarge ? 180.0 : 150.0;
-    
-    items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-    
-    return GridView.builder(
-      shrinkWrap: true, // Added so GridView works inside a Column
-      physics: const NeverScrollableScrollPhysics(), // Delegate scrolling to parent
+  final isLarge = context.isTabletOrLarger;
+  final double totalHeight = isLarge ? 180.0 : 150.0;
+
+  items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+  return SingleChildScrollView(
+    child: GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(LayoutConstants.spacingMd),
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: totalHeight,
@@ -104,8 +104,9 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
           ).push<void>(context),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmpty(BuildContext context) {
     return Center(
