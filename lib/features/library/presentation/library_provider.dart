@@ -2,9 +2,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/library_repository.dart';
 
-// IMPORTANT: Adjust these two import paths to match your actual project structure
-import '../tracking/tracking_auth_provider.dart'; 
-import '../tracking/trakt_service.dart';
+import '../../tracking/data/trakt_service.dart';
+import '../../tracking/presentation/tracking_auth_provider.dart';
 
 import './library_state.dart';
 
