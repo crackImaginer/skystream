@@ -34,7 +34,9 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
       return _buildEmpty(context);
     }
 
-    return Column(
+    // CHANGED: Replaced Column with ListView to allow vertical scrolling of the entire page
+    return ListView(
+      padding: const EdgeInsets.only(bottom: LayoutConstants.spacingLg),
       children: [
         // Section header for Movies
         const ListTile(
@@ -46,6 +48,7 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
             .where((item) => item.contentType == MultimediaContentType.movie)
             .toList(),
         ),
+        
         // Section header for TV Shows
         const ListTile(
           title: Text('TV Shows'),
@@ -53,10 +56,10 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
         // Section content for TV Shows
         _buildSectionContent(
           libraryState.items
-            // Fixed: Changed .show to .series based on your MultimediaContentType enum
             .where((item) => item.contentType == MultimediaContentType.series) 
             .toList(),
         ),
+        
         // Section header for Others
         const ListTile(
           title: Text('Others'),
@@ -73,40 +76,51 @@ class _BookmarksTabState extends ConsumerState<BookmarksTab>
   }
 
   Widget _buildSectionContent(List<MultimediaItem> items) {
-  final isLarge = context.isTabletOrLarger;
-  final double totalHeight = isLarge ? 180.0 : 150.0;
+    // If there are no items in this section, don't render an empty space
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-  items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    final isLarge = context.isTabletOrLarger;
+    
+    // Calculate exact dimensions to match your previous grid's aspect ratio
+    // Previous childAspectRatio was 2 / 3.4 (width / height)
+    final double cardWidth = isLarge ? 180.0 : 150.0;
+    final double cardHeight = cardWidth * (3.4 / 2); 
 
-  return SingleChildScrollView(
-    child: GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(LayoutConstants.spacingMd),
-      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: totalHeight,
-        childAspectRatio: 2 / 3.4,
-        crossAxisSpacing: LayoutConstants.spacingMd,
-        mainAxisSpacing: LayoutConstants.spacingMd,
+    items.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+    // CHANGED: Replaced GridView with a horizontal ListView.builder
+    return SizedBox(
+      height: cardHeight, // Horizontal lists require a bounded height
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: LayoutConstants.spacingMd),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          
+          return Padding(
+            padding: const EdgeInsets.only(right: LayoutConstants.spacingMd),
+            child: SizedBox(
+              width: cardWidth, // Constrain the width of each card
+              child: MultimediaCard(
+                key: ValueKey(item.url),
+                imageUrl:
+                    AppImageFallbacks.poster(item.posterUrl, label: item.title) ??
+                    '',
+                title: item.title,
+                heroTag: 'lib_bookmark_${item.url}_$index',
+                onTap: () => DetailsRoute(
+                  $extra: DetailsRouteExtra(item: item),
+                ).push<void>(context),
+              ),
+            ),
+          );
+        },
       ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return MultimediaCard(
-          key: ValueKey(item.url),
-          imageUrl:
-              AppImageFallbacks.poster(item.posterUrl, label: item.title) ??
-              '',
-          title: item.title,
-          heroTag: 'lib_bookmark_${item.url}_$index',
-          onTap: () => DetailsRoute(
-            $extra: DetailsRouteExtra(item: item),
-          ).push<void>(context),
-        );
-      },
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildEmpty(BuildContext context) {
     return Center(
