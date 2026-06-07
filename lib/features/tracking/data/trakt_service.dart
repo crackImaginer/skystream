@@ -105,10 +105,9 @@ class TraktService implements TrackingService {
             return true;
           }
         } on DioException catch (e) {
-          if (e.response?.statusCode != 400) { // 400 = authorization_pending
+          if (e.response?.statusCode != 400) { 
             talker.debug('TraktService: Polling error: ${e.response?.statusCode} ${e.message}');
             if (e.response?.statusCode == 404 || e.response?.statusCode == 409 || e.response?.statusCode == 410 || e.response?.statusCode == 418) {
-               // 404 Not Found, 409 Already Used, 410 Expired, 418 Denied
                talker.debug('TraktService: Terminal error, stopping polling.');
                return false;
             }
@@ -134,16 +133,69 @@ class TraktService implements TrackingService {
   @override
   Future<List<MultimediaItem>> search(String query) async {
     if (_accessToken == null) return [];
-    
-    // Search implementation
     return [];
   }
 
   @override
   Future<Map<String, String>> syncIds(MultimediaItem item) async {
-    // Trakt uses IMDB and TMDB directly in scrobbling, so we don't strictly need 
-    // a separate ID resolution unless we want the Trakt slug.
     return {};
+  }
+
+  // --- NEW: FETCH WATCHLIST FROM TRAKT ---
+  Future<List<MultimediaItem>> getWatchlist() async {
+    if (_accessToken == null) return [];
+
+    try {
+      final response = await _dio.get<dynamic>(
+        'https://api.trakt.tv/sync/watchlist',
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'trakt-api-version': '2',
+            'trakt-api-key': _clientId,
+            'Authorization': 'Bearer $_accessToken',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200 && response.data is List) {
+        final items = response.data as List;
+        final List<MultimediaItem> parsedItems = [];
+
+        for (var itemData in items) {
+          final type = itemData['type'] as String;
+          
+          if (type == 'movie' && itemData['movie'] != null) {
+            final movie = itemData['movie'];
+            parsedItems.add(MultimediaItem(
+              title: movie['title'] ?? 'Unknown Movie',
+              url: 'trakt_movie_${movie['ids']['trakt']}', 
+              posterUrl: '', // Trakt API doesn't return images directly in this endpoint
+              contentType: MultimediaContentType.movie,
+              year: movie['year'] as int?,
+              tmdbId: movie['ids']['tmdb'] as int?,
+              imdbId: movie['ids']['imdb'] as String?,
+            ));
+          } else if (type == 'show' && itemData['show'] != null) {
+            final show = itemData['show'];
+            parsedItems.add(MultimediaItem(
+              title: show['title'] ?? 'Unknown Show',
+              url: 'trakt_show_${show['ids']['trakt']}', 
+              posterUrl: '', // Trakt API doesn't return images directly in this endpoint
+              contentType: MultimediaContentType.series,
+              year: show['year'] as int?,
+              tmdbId: show['ids']['tmdb'] as int?,
+              imdbId: show['ids']['imdb'] as String?,
+            ));
+          }
+        }
+        return parsedItems;
+      }
+      return [];
+    } catch (e) {
+      talker.error('TraktService: Fetch watchlist failed', e);
+      return [];
+    }
   }
 
   Map<String, dynamic> _buildScrobblePayload(MultimediaItem item, Episode? episode, double progress) {
@@ -210,10 +262,7 @@ class TraktService implements TrackingService {
   Future<bool> markWatched(MultimediaItem item, Episode? episode, {Map<String, String>? resolvedIds}) async {
     if (_accessToken == null) return false;
     if (item.tmdbId == null && item.imdbId == null) return false;
-    
-    // We can use scrobble stop with progress >= 85 to mark as watched.
-    // Trakt automatically marks it watched if progress >= 80.
-    return _scrobble('stop', item, episode, 1.0); // Send 100% to ensure it's marked
+    return _scrobble('stop', item, episode, 1.0); 
   }
 
   @override
