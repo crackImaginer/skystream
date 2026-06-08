@@ -16,8 +16,10 @@ class Library extends _$Library {
     // 1. Instantly load the local database for a fast UI
     final state = refresh();
     
-    // 2. Trigger a background sync with Trakt on app startup
-    _performTwoWaySync();
+    // 2. CRITICAL FIX: Defer the background sync so it doesn't lock the provider graph
+    Future.microtask(() {
+      _performTwoWaySync();
+    });
     
     return state;
   }
@@ -61,9 +63,6 @@ class Library extends _$Library {
     final repository = ref.read(libraryRepositoryProvider);
     await repository.removeFromLibrary(url);
     refresh();
-    
-    // Note: To make removal two-way, you will eventually need to add a 
-    // `removeFromWatchlist` API method to your TraktService.
   }
 
   bool isBookmarked(String url) {
@@ -75,7 +74,7 @@ class Library extends _$Library {
     // repository.clearAll() if it exists
   }
 
-  // --- NEW: Trakt Watchlist Sync Logic ---
+  // --- Trakt Watchlist Sync Logic ---
   
   Future<void> _performTwoWaySync() async {
     try {
@@ -110,8 +109,6 @@ class Library extends _$Library {
     }
   }
   
-  // Expose this method if you want to add a manual "Pull-to-Refresh" 
-  // indicator in your BookmarksTab UI later.
   Future<void> forceManualSync() async {
     await _performTwoWaySync();
   }
