@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'tracking_service.dart';
 import '../domain/sync_progress_item.dart';
@@ -393,7 +394,7 @@ class TraktService implements TrackingService {
 
 // FIX: Updated reference type to TraktServiceRef so Riverpod code generator builds it flawlessly
 @riverpod
-TraktService traktService(TraktServiceRef ref) {
+TraktService traktService(Ref ref) {
   return TraktService(
     ref.watch(dioClientProvider),
     ref.watch(secureTokenStorageProvider),
