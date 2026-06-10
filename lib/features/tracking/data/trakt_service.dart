@@ -58,9 +58,18 @@ class TraktService implements TrackingService {
   }) async {
     try {
       talker.debug('TraktService: Initiating Device PIN Flow...');
+      
+      // FIX: Added required Trakt headers. If missing, Trakt returns 400/403 instantly, breaking the popup.
       final response = await _dio.post<dynamic>(
         'https://api.trakt.tv/oauth/device/code',
         data: {'client_id': _clientId},
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'trakt-api-version': '2',
+            'trakt-api-key': _clientId,
+          },
+        ),
       );
 
       final userCode = response.data['user_code'] as String;
@@ -95,6 +104,13 @@ class TraktService implements TrackingService {
               'client_id': _clientId,
               'client_secret': SyncConfig.traktClientSecret,
             },
+            options: Options(
+              headers: {
+                'Content-Type': 'application/json',
+                'trakt-api-version': '2',
+                'trakt-api-key': _clientId,
+              },
+            ),
           );
 
           final data = tokenResponse.data;
@@ -108,7 +124,6 @@ class TraktService implements TrackingService {
           if (e.response?.statusCode != 400) { 
             talker.debug('TraktService: Polling error: ${e.response?.statusCode} ${e.message}');
             if (e.response?.statusCode == 404 || e.response?.statusCode == 409 || e.response?.statusCode == 410 || e.response?.statusCode == 418) {
-               talker.debug('TraktService: Terminal error, stopping polling.');
                return false;
             }
           }
@@ -141,7 +156,6 @@ class TraktService implements TrackingService {
     return {};
   }
 
-  // --- NEW: FETCH WATCHLIST FROM TRAKT ---
   Future<List<MultimediaItem>> getWatchlist() async {
     if (_accessToken == null) return [];
 
@@ -170,7 +184,7 @@ class TraktService implements TrackingService {
             parsedItems.add(MultimediaItem(
               title: movie['title'] ?? 'Unknown Movie',
               url: 'trakt_movie_${movie['ids']['trakt']}', 
-              posterUrl: '', // Trakt API doesn't return images directly in this endpoint
+              posterUrl: '',
               contentType: MultimediaContentType.movie,
               year: movie['year'] as int?,
               tmdbId: movie['ids']['tmdb'] as int?,
@@ -181,7 +195,7 @@ class TraktService implements TrackingService {
             parsedItems.add(MultimediaItem(
               title: show['title'] ?? 'Unknown Show',
               url: 'trakt_show_${show['ids']['trakt']}', 
-              posterUrl: '', // Trakt API doesn't return images directly in this endpoint
+              posterUrl: '', 
               contentType: MultimediaContentType.series,
               year: show['year'] as int?,
               tmdbId: show['ids']['tmdb'] as int?,
@@ -377,8 +391,9 @@ class TraktService implements TrackingService {
   }
 }
 
+// FIX: Updated reference type to TraktServiceRef so Riverpod code generator builds it flawlessly
 @riverpod
-TraktService traktService(Ref ref) {
+TraktService traktService(TraktServiceRef ref) {
   return TraktService(
     ref.watch(dioClientProvider),
     ref.watch(secureTokenStorageProvider),

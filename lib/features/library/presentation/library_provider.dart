@@ -2,8 +2,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 import '../../../../core/storage/library_repository.dart';
 
+// Using correct relative imports to match your architecture
+import '../../tracking/presentation/tracking_auth_provider.dart'; 
 import '../../tracking/data/trakt_service.dart';
-import '../../tracking/presentation/tracking_auth_provider.dart';
 
 import './library_state.dart';
 
@@ -16,8 +17,10 @@ class Library extends _$Library {
     // 1. Instantly load the local database for a fast UI
     final state = refresh();
     
-    // 2. CRITICAL FIX: Defer the background sync so it doesn't lock the provider graph
-    Future.microtask(() {
+    // 2. CRITICAL FIX: Add a 2-second delay to background sync. 
+    // This allows Riverpod to finish building the entire app graph (including Settings UI) 
+    // before the network calls are made.
+    Future.delayed(const Duration(seconds: 2), () {
       _performTwoWaySync();
     });
     
@@ -36,12 +39,10 @@ class Library extends _$Library {
   }
 
   Future<void> addItem(MultimediaItem item) async {
-    // 1. Add locally and update UI instantly
     final repository = ref.read(libraryRepositoryProvider);
     await repository.addToLibrary(item);
     refresh();
 
-    // 2. Push to Trakt if it is a supported content type
     if (item.contentType == MultimediaContentType.movie || 
         item.contentType == MultimediaContentType.series) {
       
@@ -50,11 +51,7 @@ class Library extends _$Library {
 
       if (isTraktLoggedIn) {
         final traktService = ref.read(traktServiceProvider);
-        final success = await traktService.addToPlanToWatch(item);
-        
-        if (!success) {
-          // Sync failed, but the item is already safely stored in the local repository
-        }
+        await traktService.addToPlanToWatch(item);
       }
     }
   }
@@ -75,7 +72,6 @@ class Library extends _$Library {
   }
 
   // --- Trakt Watchlist Sync Logic ---
-  
   Future<void> _performTwoWaySync() async {
     try {
       final authState = await ref.read(trackingAuthProvider.future);
@@ -86,26 +82,21 @@ class Library extends _$Library {
       final traktService = ref.read(traktServiceProvider);
       final repository = ref.read(libraryRepositoryProvider);
 
-      // Pull the remote watchlist from Trakt
       final remoteItems = await traktService.getWatchlist();
-
       bool hasChanges = false;
 
-      // Merge remote items into the local library
       for (final remoteItem in remoteItems) {
-        // Only add if it does not already exist in the local database
         if (!repository.isInLibrary(remoteItem.url)) {
           await repository.addToLibrary(remoteItem);
           hasChanges = true;
         }
       }
 
-      // If new items were pulled from Trakt, refresh the UI
       if (hasChanges) {
         refresh();
       }
     } catch (e) {
-      // Background sync failed (e.g., no internet)
+      // Sync failed silently (e.g. no internet)
     }
   }
   
