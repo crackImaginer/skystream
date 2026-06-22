@@ -11,10 +11,10 @@ part 'tracking_auth_provider.g.dart';
 class TrackingAuth extends _$TrackingAuth {
   @override
   FutureOr<Map<String, bool>> build() async {
-    final simkl = ref.watch(simklServiceProvider);
-    final trakt = ref.watch(traktServiceProvider);
-    final mal = ref.watch(malServiceProvider);
-    final anilist = ref.watch(aniListServiceProvider);
+    final simkl = ref.read(simklServiceProvider);
+    final trakt = ref.read(traktServiceProvider);
+    final mal = ref.read(malServiceProvider);
+    final anilist = ref.read(aniListServiceProvider);
 
     return {
       'simkl': await simkl.isLoggedIn,

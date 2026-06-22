@@ -58,9 +58,16 @@ class TraktService implements TrackingService {
   }) async {
     try {
       talker.debug('TraktService: Initiating Device PIN Flow...');
+      
+
       final response = await _dio.post<dynamic>(
         'https://api.trakt.tv/oauth/device/code',
         data: {'client_id': _clientId},
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        ),
       );
 
       final userCode = response.data['user_code'] as String;
@@ -94,7 +101,13 @@ class TraktService implements TrackingService {
               'code': deviceCode,
               'client_id': _clientId,
               'client_secret': SyncConfig.traktClientSecret,
+              'grant_type': 'urn:ietf:params:oauth:grant-type:device_code', // Added for OAuth safety
             },
+            options: Options(
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            ),
           );
 
           final data = tokenResponse.data;
@@ -108,7 +121,6 @@ class TraktService implements TrackingService {
           if (e.response?.statusCode != 400) { // 400 = authorization_pending
             talker.debug('TraktService: Polling error: ${e.response?.statusCode} ${e.message}');
             if (e.response?.statusCode == 404 || e.response?.statusCode == 409 || e.response?.statusCode == 410 || e.response?.statusCode == 418) {
-               // 404 Not Found, 409 Already Used, 410 Expired, 418 Denied
                talker.debug('TraktService: Terminal error, stopping polling.');
                return false;
             }
@@ -119,7 +131,12 @@ class TraktService implements TrackingService {
       talker.debug('TraktService: Login timed out.');
       return false;
     } catch (e) {
-      talker.error('TraktService: Login failed', e);
+      if (e is DioException) {
+        talker.error('TraktService: Login failed. HTTP Status: ${e.response?.statusCode}');
+        talker.error('Trakt Error Payload: ${e.response?.data}'); 
+      } else {
+        talker.error('TraktService: Login failed', e);
+      }
       return false;
     }
   }
