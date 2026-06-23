@@ -151,7 +151,7 @@ SkyStream is a modern, media streaming client. It draws inspiration from the ver
 Download the latest version from the **[Releases Page](https://github.com/akashdh11/skystream/releases/latest)**.
 
 ### 🤖 Android / Android TV
-1. Download the `skystream-android-arm64-v8a-v2.5.0.apk` (recommended for most modern phones) or `skystream-android-armeabi-v7a-v2.5.0.apk` (for TV) from Releases.
+1. Download the `skystream-android-arm64-v8a-v2.5.1.apk` (recommended for most modern phones) or `skystream-android-armeabi-v7a-v2.5.1.apk` (for TV) from Releases.
 2. Open the file and tap **Install**.
    - *Note: You may need to allow "Install from Unknown Sources" in your browser settings.*
 3. Open SkyStream and install extensions via **Settings > Extensions**.
@@ -169,7 +169,7 @@ SkyStream is not on the App Store. You must **sideload** it using a computer.
 - [Sideloadly Video Guide](https://www.youtube.com/watch?v=vqTsavQc3lQ)
 
 **Steps:**
-1. Download `skystream-ios-unsigned-v2.5.0.ipa` from the [Releases Page](https://github.com/akashdh11/skystream/releases/latest).
+1. Download `skystream-ios-unsigned-v2.5.1.ipa` from the [Releases Page](https://github.com/akashdh11/skystream/releases/latest).
 2. Open **Impactor** or **Sideloadly** on your computer.
 3. Connect your iPhone/iPad via USB.
 4. Drag the `.ipa` file into the Sideloadly window.
