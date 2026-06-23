@@ -441,27 +441,27 @@ class DownloadService {
   }) async {
     if (kDebugMode) {
       debugPrint('[DownloadService] startDownload called');
-      debugPrint('[DownloadService] - URL: $url');
-      debugPrint('[DownloadService] - Tracking URL: $trackingUrl');
-      debugPrint('[DownloadService] - Filename: $filename');
-      debugPrint('[DownloadService] - Directory: $directory');
     }
 
-    // Industry Standard: Ask for battery optimization when a real download starts
+    // 1. PREVENT LOOPING: Check if file already exists physically on disk
+    final existingFile = await getDownloadedFile(item, episode: episode);
+    if (existingFile != null && await existingFile.exists()) {
+      if (kDebugMode) debugPrint('[DownloadService] File already exists, skipping.');
+      // Update UI to show completed state immediately
+      _ref.read(activeDownloadsProvider.notifier).remove(trackingUrl ?? url);
+      return true;
+    }
+
     await requestIgnoreBatteryOptimizations();
 
-    // Request permission on Android (Version Aware)
     if (Platform.isAndroid) {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       if (androidInfo.version.sdkInt >= 30) {
-        // For Android 11+, request MANAGE_EXTERNAL_STORAGE to allow native C++ players (media_kit)
-        // to bypass FUSE directory depth limits for deeply nested series folders
         final status = await Permission.manageExternalStorage.status;
         if (!status.isGranted) {
           await Permission.manageExternalStorage.request();
         }
       } else {
-        // For Android 10 and below, request standard storage permission
         await Permission.storage.request();
       }
     }
@@ -469,7 +469,7 @@ class DownloadService {
     final isAndroid = Platform.isAndroid;
     final isIOS = Platform.isIOS;
 
-    // Prevention: Check if task is ALREADY running (using database for robustness)
+    // Prevention: Check database for tasks that are legitimately running or paused
     final records = await FileDownloader().database.allRecords();
     final existingRecord = records.firstWhereOrNull(
       (r) =>
@@ -481,43 +481,26 @@ class DownloadService {
     );
 
     if (existingRecord != null) {
-      if (kDebugMode) {
-        debugPrint(
-          '[DownloadService] Task already exists in database with status: ${existingRecord.status}',
-        );
-      }
-
-      // If it was paused, resume it!
       if (existingRecord.status == TaskStatus.paused) {
-        if (kDebugMode) {
-          debugPrint('[DownloadService] Auto-resuming paused task.');
-        }
         if (existingRecord.task is DownloadTask) {
           await FileDownloader().resume(existingRecord.task as DownloadTask);
         }
       }
-
       _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
       return true;
     }
 
-    // Path Logic:
-    // Android/Desktop: use BaseDirectory.root with absolute path.
-    // iOS: use BaseDirectory.applicationDocuments with relative path for sandbox safety.
     BaseDirectory baseDir;
     String taskDirectory;
 
     if (isIOS) {
       baseDir = BaseDirectory.applicationDocuments;
-      // On iOS, 'directory' (from getDownloadPath(absolute: false)) is relative: "Skystream/Title"
       taskDirectory = directory;
     } else {
-      // Android, Windows, macOS, Linux: use absolute paths with BaseDirectory.root
       baseDir = BaseDirectory.root;
       if (isAndroid) {
         taskDirectory = p.join(await _getPublicDownloadsPath(), directory);
       } else {
-        // Desktop: directory is already absolute (e.g. /Users/akash/Downloads/Skystream/Title)
         taskDirectory = directory;
       }
     }
@@ -528,22 +511,19 @@ class DownloadService {
       displayName: filename,
       baseDirectory: baseDir,
       directory: taskDirectory,
+      group: 'downloads', // FIX: Links to your foreground notification group so it actually starts!
       headers: headers ?? {},
       updates: Updates.statusAndProgress,
-      retries: 3, // Align with example
-      allowPause: true,
+      retries: 0, // FIX: Prevents restart loops when streaming tokens expire
+      allowPause: true, 
       metaData: trackingUrl ?? url,
     );
 
-    if (kDebugMode) debugPrint('[DownloadService] Enqueuing task...');
-
-    // Create the directory if it doesn't exist
     final String fullDirPath;
     if (isIOS) {
       final docsDir = await getApplicationDocumentsDirectory();
       fullDirPath = p.join(docsDir.path, taskDirectory);
     } else {
-      // Android/Desktop: taskDirectory is already absolute
       fullDirPath = taskDirectory;
     }
 
@@ -553,11 +533,9 @@ class DownloadService {
     }
 
     final success = await FileDownloader().enqueue(task);
-    if (kDebugMode) debugPrint('[DownloadService] Enqueue result: $success');
 
     if (success) {
       _ref.read(activeDownloadsProvider.notifier).add(trackingUrl ?? url);
-      // Save metadata for offline support
       await _ref
           .read(storageServiceProvider)
           .saveDownloadMetadata(task.taskId, item, episode: episode);

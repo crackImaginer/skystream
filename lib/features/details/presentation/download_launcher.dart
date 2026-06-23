@@ -343,12 +343,18 @@ class DownloadLauncher {
   }
 
   String _getFileExtension(String url, String? mimeType) {
+    // 1. Check explicit MIME types first
     if (mimeType != null) {
-      if (mimeType.contains('video/mp4')) return '.mp4';
-      if (mimeType.contains('video/x-matroska')) return '.mkv';
-      if (mimeType.contains('video/webm')) return '.webm';
+      final lowerMime = mimeType.toLowerCase();
+      if (lowerMime.contains('video/mp4')) return '.mp4';
+      if (lowerMime.contains('video/x-matroska')) return '.mkv';
+      if (lowerMime.contains('video/webm')) return '.webm';
+      if (lowerMime.contains('video/mp2t')) return '.ts';
+      if (lowerMime.contains('application/x-mpegurl') || 
+          lowerMime.contains('application/vnd.apple.mpegurl')) {return '.m3u8';}
     }
 
+    // 2. Fallback to parsing the URL path
     final uri = Uri.tryParse(url);
     if (uri != null) {
       final path = uri.path.toLowerCase();
@@ -356,8 +362,10 @@ class DownloadLauncher {
       if (path.endsWith('.mkv')) return '.mkv';
       if (path.endsWith('.webm')) return '.webm';
       if (path.endsWith('.avi')) return '.avi';
+      if (path.endsWith('.ts')) return '.ts';
+      if (path.endsWith('.m3u8')) return '.m3u8';
     }
 
-    return '.mp4'; // Default
+    return '.mp4'; // Default fallback
   }
 }
