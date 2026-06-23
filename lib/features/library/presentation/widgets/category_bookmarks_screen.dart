@@ -6,6 +6,8 @@ import '../../../../core/utils/responsive_breakpoints.dart';
 import '../../../../shared/widgets/multimedia_card.dart';
 import '../../../../core/domain/entity/multimedia_item.dart';
 
+import '../../../details/presentation/tmdb_movie_details_screen.dart';
+
 class CategoryBookmarksScreen extends StatelessWidget {
   final String categoryTitle;
   final List<MultimediaItem> items;
@@ -41,9 +43,26 @@ class CategoryBookmarksScreen extends StatelessWidget {
             imageUrl: AppImageFallbacks.poster(item.posterUrl, label: item.title) ?? '',
             title: item.title,
             heroTag: 'lib_bookmark_detail_${item.url}_$index',
-            onTap: () => DetailsRoute(
-              $extra: DetailsRouteExtra(item: item),
-            ).push<void>(context),
+            onTap: () {
+              // 1. Check if this is a synced Trakt item
+              if (item.url.startsWith('trakt_sync_') && item.tmdbId != null) {
+                // Route to TMDB screen so the user can select a provider
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => TmdbMovieDetailsScreen(
+                      movieId: item.tmdbId!,
+                      mediaType: item.contentType == MultimediaContentType.movie ? 'movie' : 'tv',
+                    ),
+                  ),
+                );
+              } 
+              // 2. Otherwise, handle standard library items
+              else {
+                DetailsRoute(
+                  $extra: DetailsRouteExtra(item: item),
+                ).push<void>(context);
+              }
+            },
           );
         },
       ),
